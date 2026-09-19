@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import webbrowser
 from datetime import date, datetime
 from pathlib import Path
 
+from .catalog import (
+    CatalogError,
+    CourseOption,
+    TEMPLATE_CSV,
+    find_conflicts,
+    load_catalog,
+)
 from .fetch import ENV_VAR, FetchError, fetch_ics, read_ics, resolve_url, save_url
+from .planner import render_planner
+from .semester import SEMESTERS, get_semester
 from .model import TYPE_LABELS, filter_events, load_events
 from .render import render_html
 
@@ -90,6 +100,97 @@ def cmd_courses(args) -> int:
     return 0
 
 
+def _read_selection(path: str | None, options: list[CourseOption]) -> list[CourseOption]:
+    """Auswahl aus der im Planer exportierten auswahl.json lesen."""
+    if not path:
+        return options
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    keys = set(data.get("keys") or data if isinstance(data, list) else data.get("keys", []))
+    chosen = [o for o in options if o.key in keys]
+    unknown = keys - {o.key for o in options}
+    if unknown:
+        print(
+            f"Warnung: {len(unknown)} Einträge aus der Auswahl fehlen im Katalog "
+            f"({', '.join(sorted(unknown)[:3])}…)",
+            file=sys.stderr,
+        )
+    return chosen
+
+
+def cmd_plan(args) -> int:
+    options = load_catalog(args.catalog)
+    semester = get_semester(args.semester)
+    out = Path(args.out)
+    out.write_text(render_planner(options, semester, args.title), encoding="utf-8")
+
+    without_times = [o for o in options if not o.slots_known]
+    print(f"{len(options)} Einträge aus {args.catalog} → {out.resolve()}")
+    if without_times:
+        print(f"Hinweis: {len(without_times)} Einträge ohne Zeitangabe werden nicht angezeigt.")
+    if args.open:
+        webbrowser.open(out.resolve().as_uri())
+    return 0
+
+
+def cmd_template(args) -> int:
+    out = Path(args.out)
+    if out.exists() and not args.force:
+        print(f"{out} existiert bereits - mit --force überschreiben.", file=sys.stderr)
+        return 2
+    out.write_text(TEMPLATE_CSV, encoding="utf-8")
+    print(f"Vorlage geschrieben: {out.resolve()}")
+    print("Spalten ausfüllen (aus TUMonline) und dann: python3 -m tumcal plan --catalog " + str(out))
+    return 0
+
+
+def cmd_conflicts(args) -> int:
+    options = _read_selection(args.select, load_catalog(args.catalog))
+    conflicts = find_conflicts(options, get_semester(args.semester))
+    if not conflicts:
+        print(f"Keine Überschneidungen bei {len(options)} Veranstaltungen.")
+        return 0
+    seen = set()
+    for conflict in conflicts:
+        pair = tuple(sorted((conflict.first.key, conflict.second.key)))
+        if pair in seen:
+            continue
+        seen.add(pair)
+        print(conflict.describe())
+    paare = "Paar" if len(seen) == 1 else "Paare"
+    print(f"\n{len(seen)} kollidierendes {paare}, {len(conflicts)} betroffene Termine."
+          if len(seen) == 1
+          else f"\n{len(seen)} kollidierende {paare}, {len(conflicts)} betroffene Termine.")
+    return 1
+
+
+def cmd_anmelden(args) -> int:
+    """Öffnet die TUMonline-Seiten der Auswahl - der Klick bleibt bei dir."""
+    options = _read_selection(args.select, load_catalog(args.catalog))
+    if not options:
+        print("Keine Auswahl gefunden.", file=sys.stderr)
+        return 2
+
+    with_url = [o for o in options if o.url]
+    print(f"{len(options)} Veranstaltungen ausgewählt, {len(with_url)} mit Anmeldelink.\n")
+    print("Die Anmeldung selbst bestätigst du in TUMonline - dieses Skript klickt nichts an.")
+    print("Seit WS 20/21 gilt kein 'First come, first served': die Reihenfolge ist egal.\n")
+
+    for index, option in enumerate(options, 1):
+        frist = f" · Frist {option.deadline:%d.%m.%Y}" if option.deadline else ""
+        print(f"[{index}/{len(options)}] {option.label}{frist}")
+        if not option.url:
+            print("      kein Link hinterlegt - in TUMonline suchen nach: "
+                  f"{option.lv_id or option.title}")
+            continue
+        print(f"      {option.url}")
+        if args.open:
+            input("      [Enter] öffnet die Seite, [Strg+C] bricht ab ")
+            webbrowser.open(option.url)
+    if not args.open:
+        print("\nMit --open werden die Seiten nacheinander im Browser geöffnet.")
+    return 0
+
+
 def cmd_config(args) -> int:
     path = save_url(args.url)
     print(f"iCal-URL gespeichert in {path} (nur für dich lesbar).")
@@ -137,6 +238,33 @@ def build_parser() -> argparse.ArgumentParser:
     _add_source_args(courses)
     courses.set_defaults(func=cmd_courses)
 
+    plan = sub.add_parser("plan", help="Mögliche LVs als Planungskalender anzeigen")
+    plan.add_argument("--catalog", required=True, help="CSV/JSON mit dem LV-Angebot")
+    plan.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
+    plan.add_argument("--out", default="planung.html")
+    plan.add_argument("--title", default="LV-Planung")
+    plan.add_argument("--open", action="store_true", help="Danach im Browser öffnen")
+    plan.set_defaults(func=cmd_plan)
+
+    template = sub.add_parser("template", help="Leere Katalog-Vorlage schreiben")
+    template.add_argument("--out", default="lv-angebot.csv")
+    template.add_argument("--force", action="store_true")
+    template.set_defaults(func=cmd_template)
+
+    conflicts = sub.add_parser("conflicts", help="Überschneidungen der Auswahl prüfen")
+    conflicts.add_argument("--catalog", required=True)
+    conflicts.add_argument("--select", help="auswahl.json aus dem Planer")
+    conflicts.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
+    conflicts.set_defaults(func=cmd_conflicts)
+
+    anmelden = sub.add_parser(
+        "anmelden", help="Anmeldelinks der Auswahl auflisten bzw. nacheinander öffnen"
+    )
+    anmelden.add_argument("--catalog", required=True)
+    anmelden.add_argument("--select", help="auswahl.json aus dem Planer")
+    anmelden.add_argument("--open", action="store_true", help="Seiten im Browser öffnen")
+    anmelden.set_defaults(func=cmd_anmelden)
+
     config = sub.add_parser("config", help="iCal-URL dauerhaft speichern")
     config.add_argument("--url", required=True, help="TUMonline iCal-Token-URL")
     config.set_defaults(func=cmd_config)
@@ -151,9 +279,12 @@ def main(argv: list[str] | None = None) -> int:
     except BrokenPipeError:
         # Ausgabe nach `| head` o. Ä. - kein Fehlerfall.
         return 0
-    except FetchError as exc:
+    except (FetchError, CatalogError) as exc:
         print(f"Fehler: {exc}", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        print("\nAbgebrochen.", file=sys.stderr)
+        return 130
     except OSError as exc:
         print(f"Dateifehler: {exc}", file=sys.stderr)
         return 2

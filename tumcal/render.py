@@ -95,16 +95,14 @@ def render_html(events: list[CourseEvent], title: str = "Mein TUM-Stundenplan") 
     }
     data = json.dumps(payload, ensure_ascii=False)
     safe_title = html.escape(title)
-    return _TEMPLATE.replace("__TITLE__", safe_title).replace("__DATA__", data)
+    return (
+        _TEMPLATE.replace("__CSS__", _CSS)
+        .replace("__TITLE__", safe_title)
+        .replace("__DATA__", data)
+    )
 
 
-_TEMPLATE = r"""<!DOCTYPE html>
-<html lang="de">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>__TITLE__</title>
-<style>
+_CSS = r"""
   :root {
     --bg: #f6f7f9; --surface: #ffffff; --border: #dfe3e8;
     --text: #15181d; --muted: #666e79;
@@ -177,7 +175,16 @@ _TEMPLATE = r"""<!DOCTYPE html>
     .grid { grid-template-columns: 44px repeat(6, minmax(92px, 1fr)); overflow-x: auto; }
     .wrap { padding: 16px; }
   }
-</style>
+"""
+
+_TEMPLATE = r"""<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+__CSS__</style>
 </head>
 <body>
 <div class="wrap">

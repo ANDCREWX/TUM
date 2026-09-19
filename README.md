@@ -33,7 +33,7 @@ Der Token ist ein Geheimnis: Wer den Link hat, sieht deinen Kalender. Er steht
 deshalb in keiner eingecheckten Datei — `.gitignore` schließt `*.ics`,
 `kalender.html` und `config.json` aus.
 
-## Verwendung
+## Teil 1: Eigener Stundenplan (`build`)
 
 ```bash
 # Link einmalig speichern (~/.config/tumcal/config.json, chmod 600)
@@ -81,11 +81,64 @@ python3 -m tumcal build --file export.ics                            # oder aus 
 - **Abgesagte Termine** markiert statt still weggelassen.
 - Ganztagstermine, gefaltete Zeilen und `DURATION`-statt-`DTEND` korrekt behandelt.
 
+## Teil 2: Anmeldung planen (`plan`)
+
+Solange du noch für nichts angemeldet bist, ist der persönliche Kalender leer.
+Für diesen Fall gibt es die **Planungsansicht**: das mögliche LV-Angebot als
+Wochenkalender, zum Anklicken, mit Überschneidungsprüfung.
+
+Das Angebot ist in TUMonline **kein iCal-Feed** — es muss als Tabelle vorliegen:
+
+```bash
+python3 -m tumcal template --out lv-angebot.csv   # Vorlage erzeugen
+# Spalten aus TUMonline befüllen (Semesterplan / LV-Suche, Export oder Copy-Paste)
+python3 -m tumcal plan --catalog lv-angebot.csv --semester ws2627 --open
+```
+
+Die Spalte `Tag`/`Von`/`Bis`/`Rhythmus` genügt — die konkreten Termine werden
+über die Vorlesungszeit ausgerollt, inklusive Weihnachtsferien und Feiertagen.
+`wöchentlich`, `14-tägig` und `Blockveranstaltung` werden unterschieden.
+
+In der Planungsansicht:
+
+- Angebot als blasse Blöcke, deine Auswahl in Farbe
+- **Terminkonflikte** rot umrandet und oben aufgelistet
+- Warnung, wenn du mehrere Gruppen derselben Übung anhakst
+- ECTS-Summe der Auswahl
+- **Anmelde-Checkliste** mit Direktlinks nach TUMonline
+- Export der Auswahl als `auswahl.json` und als `.ics`
+
+Danach im Terminal:
+
+```bash
+python3 -m tumcal conflicts --catalog lv-angebot.csv --select auswahl.json
+python3 -m tumcal anmelden  --catalog lv-angebot.csv --select auswahl.json --open
+```
+
+### Zur Anmeldung selbst
+
+`anmelden` **führt die Anmeldung nicht durch**. Es listet deine Auswahl mit
+Fristen auf und öffnet auf Wunsch die TUMonline-Seiten nacheinander im Browser —
+den Anmeldeklick machst du selbst, in deiner eigenen Sitzung.
+
+Das ist Absicht: Die LV-Anmeldung ist eine verbindliche Handlung unter deinem
+Namen, sie setzt den TUM-Login mit Zwei-Faktor voraus, und ein Skript, das
+blind auf Formularknöpfe klickt, die es nie gesehen hat, ist genau da falsch.
+Entspannend dabei: Seit WS 20/21 gibt es **kein „First come, first served"** —
+innerhalb des Anmeldezeitraums ist der Zeitpunkt egal, es zählt kein Sekundenvorsprung.
+
 ## Kalender-Abo statt HTML
 
 Denselben Token-Link kannst du direkt in Google Calendar, Apple Kalender oder
 Outlook als Abo eintragen („Kalender über URL abonnieren"). Die Aktualisierung
 dauert dort allerdings mehrere Stunden, und die Einträge bleiben unaufgeräumt.
+
+## Semestertermine
+
+In `tumcal/semester.py` hinterlegt (WS 2026/27: Vorlesungszeit 12.10.2026 –
+05.02.2027, Weihnachtsferien 24.12. – 06.01., Allerheiligen 01.11.). Quelle ist
+das TUM-Rundschreiben „Termine und Feiertage im Studienjahr 2026/27"; einzelne
+Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 
 ## Tests
 
@@ -93,5 +146,5 @@ dauert dort allerdings mehrere Stunden, und die Einträge bleiben unaufgeräumt.
 python3 -m pytest tests/ -q
 ```
 
-Die Tests laufen gegen `tests/fixtures/beispiel.ics` — eine künstliche Datei im
-TUMonline-Format, keine echten Daten.
+41 Tests gegen die Fixtures in `tests/fixtures/` — künstliche Daten im
+TUMonline-Format, keine echten Termine.

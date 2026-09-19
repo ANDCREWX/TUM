@@ -1,0 +1,10 @@
+LV-Nummer;Titel;Art;Modul;ECTS;Gruppe;Tag;Von;Bis;Rhythmus;Raum;Dozent;Erster Termin;Anmeldefrist;Link;Hinweis
+IN0001;Einführung in die Informatik 1;VO;IN0001;6;;Mo;10:00;12:00;wöchentlich;5602.EG.001 (MI HS 1);Prof. Beispiel;;01.10.2026;https://campus.tum.de/tumonline/lv/IN0001;
+IN0001;Einführung in die Informatik 1;UE;IN0001;;Gruppe 01;Mi;14:00;16:00;wöchentlich;5605.EG.011;;;01.10.2026;https://campus.tum.de/tumonline/lv/IN0001-UE01;Nur eine Gruppe
+IN0001;Einführung in die Informatik 1;UE;IN0001;;Gruppe 02;Do;10:00;12:00;wöchentlich;5605.EG.011;;;01.10.2026;https://campus.tum.de/tumonline/lv/IN0001-UE02;Nur eine Gruppe
+WI000123;Grundlagen der Betriebswirtschaftslehre;VO;WI000123;6;;Mo;11:00;13:00;wöchentlich;Audimax;;;01.10.2026;https://campus.tum.de/tumonline/lv/WI000123;
+WI000123;Grundlagen der Betriebswirtschaftslehre;UE;WI000123;;Gruppe A;Fr;08:00;10:00;14-tägig;2300;;;;https://campus.tum.de/tumonline/lv/WI000123-UEA;
+MA0901;Lineare Algebra für Informatik;VO;MA0901;8;;Di;08:30;10:00;wöchentlich;5510.EG.001 (MW 0001);;;;https://campus.tum.de/tumonline/lv/MA0901;
+MA0901;Lineare Algebra für Informatik;UE;MA0901;;Zentralübung;Do;16:00;18:00;wöchentlich;MW 0001;;;;;
+IN0002;Praktikum Grundlagen der Programmierung;PR;IN0002;6;;Fr;13:00;17:00;wöchentlich;MI Rechnerhalle;;09.10.2026;;https://campus.tum.de/tumonline/lv/IN0002;Blockphase im März
+WI000456;Einführung in die Wirtschaftsinformatik;VO;WI000456;5;;Do;10:00;12:00;wöchentlich;1200;;;;https://campus.tum.de/tumonline/lv/WI000456;Kollidiert mit IN0001 Gruppe 02
