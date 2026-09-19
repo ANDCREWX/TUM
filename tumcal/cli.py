@@ -20,6 +20,8 @@ from .catalog import (
     load_catalog,
 )
 from .fetch import ENV_VAR, FetchError, fetch_ics, read_ics, resolve_url, save_url
+from .curriculum import check_plan, load_curriculum
+from .exams import parse_exams
 from .module import apply_ects, ects_total, missing_lectures, parse_modules
 from .planner import render_planner
 from .semester import SEMESTERS, get_semester
@@ -372,6 +374,77 @@ def cmd_anmelden(args) -> int:
     return 0
 
 
+def cmd_curriculum(args) -> int:
+    """Plan gegen die Pflichtmodule der Studienordnung halten."""
+    curriculum = load_curriculum(args.curriculum)
+    options = load_catalog(args.catalog)
+    ergebnis = check_plan(options, curriculum, semester=args.semester)
+
+    print(f"{args.semester}. Fachsemester laut Studienordnung: "
+          f"{ergebnis.planned_credits + ergebnis.missing_credits:g} Credits\n")
+
+    if ergebnis.planned:
+        print("Im Plan:")
+        for modul in ergebnis.planned:
+            mark = " [Grundlagenprüfung]" if modul.foundation else ""
+            print(f"  ✓ {modul.code:<12} {modul.name[:44]:<44} {modul.ects:>4.0f} CR{mark}")
+    if ergebnis.missing:
+        print("\nFEHLT im Plan:")
+        for modul in ergebnis.missing:
+            mark = " [Grundlagenprüfung]" if modul.foundation else ""
+            print(f"  ✗ {modul.code:<12} {modul.name[:44]:<44} {modul.ects:>4.0f} CR{mark}")
+    if ergebnis.unlisted:
+        print("\nIm Plan, aber nicht in der Studienordnung (Pflichtbereich):")
+        for eintrag in ergebnis.unlisted:
+            print(f"  ? {eintrag}")
+
+    print(f"\nGrundlagenprüfungen (§ 38 Abs. 2): {ergebnis.foundation_planned:g} von "
+          f"{ergebnis.foundation_total:g} Credits im Plan.")
+    print("  Mindestens 12 Credits davon bis Ende des 2. Fachsemesters.")
+    if ergebnis.foundation_planned < 12:
+        print("  ACHTUNG: der Plan deckt die Hürde nicht ab.")
+    return 1 if ergebnis.missing or ergebnis.unlisted else 0
+
+
+def cmd_exams(args) -> int:
+    """Prüfungstermine und Anmeldefristen auflisten."""
+    pruefungen = parse_exams(Path(args.input).read_text(encoding="utf-8", errors="replace"))
+    if not pruefungen:
+        print("Keine Prüfungstermine erkannt.", file=sys.stderr)
+        return 2
+
+    for pruefung in sorted(pruefungen, key=lambda p: p.slots[0].day):
+        slot = pruefung.slots[0]
+        tag = WOCHENTAGE[slot.day.weekday()]
+        print(f"{tag} {slot.day:%d.%m.%Y}  {slot.start:%H:%M}-{slot.end:%H:%M}  "
+              f"{pruefung.title[:44]:<44} ({pruefung.group})")
+        if pruefung.registration_start and pruefung.deadline:
+            print(f"{'':12}Anmeldung {pruefung.registration_start:%d.%m.%Y} – "
+                  f"{pruefung.deadline:%d.%m.%Y}"
+                  + (f", Abmeldung bis {pruefung.withdraw_until:%d.%m.%Y}"
+                     if pruefung.withdraw_until else ""))
+
+    # Zwei Klausuren am selben Tag sind planungsrelevant.
+    nach_tag: dict = {}
+    for pruefung in pruefungen:
+        nach_tag.setdefault(pruefung.slots[0].day, []).append(pruefung)
+    doppelt = {tag: ps for tag, ps in nach_tag.items() if len(ps) > 1}
+    if doppelt:
+        print()
+        for tag, ps in sorted(doppelt.items()):
+            print(f"Mehrere Prüfungen am {tag:%d.%m.%Y}: "
+                  + ", ".join(f"{p.title[:28]} {p.slots[0].start:%H:%M}" for p in ps))
+
+    if args.conflicts:
+        ueberschneidung = find_conflicts(pruefungen, get_semester(args.semester))
+        print()
+        print(f"{len(ueberschneidung)} echte Zeitüberschneidungen."
+              if ueberschneidung else "Keine Zeitüberschneidung zwischen den Prüfungen.")
+        for conflict in ueberschneidung[:5]:
+            print("  " + conflict.describe())
+    return 0
+
+
 def cmd_config(args) -> int:
     path = save_url(args.url)
     print(f"iCal-URL gespeichert in {path} (nur für dich lesbar).")
@@ -475,6 +548,20 @@ def build_parser() -> argparse.ArgumentParser:
     modules.add_argument("--input", required=True, help="Kopierte Modulbeschreibungen")
     modules.add_argument("--catalog", help="Katalog gegenprüfen: welche LV fehlt?")
     modules.set_defaults(func=cmd_modules)
+
+    curriculum = sub.add_parser(
+        "curriculum", help="Plan gegen die Pflichtmodule der Studienordnung prüfen"
+    )
+    curriculum.add_argument("--catalog", required=True)
+    curriculum.add_argument("--semester", type=int, default=1, help="Fachsemester (Standard: 1)")
+    curriculum.add_argument("--curriculum", help="Eigene Modulliste (CSV); Standard: WI B.Sc.")
+    curriculum.set_defaults(func=cmd_curriculum)
+
+    exams = sub.add_parser("exams", help="Prüfungstermine und Anmeldefristen auswerten")
+    exams.add_argument("--input", required=True, help="Kopierte Prüfungsseiten")
+    exams.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
+    exams.add_argument("--conflicts", action="store_true", help="Zeitüberschneidungen prüfen")
+    exams.set_defaults(func=cmd_exams)
 
     config = sub.add_parser("config", help="iCal-URL dauerhaft speichern")
     config.add_argument("--url", required=True, help="TUMonline iCal-Token-URL")

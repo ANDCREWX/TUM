@@ -156,6 +156,39 @@ Moduls geschrieben, in der Summe aber je Modul nur einmal gezählt. Die
 angezeigte Punktzahl ändert sich dadurch nicht, wenn du die Übungsgruppe
 wechselst.
 
+### Studienordnung gegenprüfen
+
+Die Modulbeschreibung sagt, was zu einem Modul gehört. Die Studienordnung sagt,
+welche Module überhaupt vorgeschrieben sind — und ob der eigene Plan dazu passt.
+
+```bash
+python3 -m tumcal curriculum --catalog paste.txt --semester 1
+```
+
+Gemeldet werden Pflichtmodule des Fachsemesters, die im Plan fehlen, und
+Module im Plan, die im Pflichtbereich der Ordnung nicht vorkommen. Zusätzlich
+werden die Credits aus Grundlagenprüfungen ausgewiesen — bei TUM WI müssen
+davon mindestens 12 bis zum Ende des zweiten Fachsemesters bestanden sein
+(§ 38 Abs. 2 FPSO).
+
+Die Modulliste liegt als CSV in `tumcal/data/` (B.Sc. Wirtschaftsinformatik,
+FPSO vom 10.08.2023 i. d. F. vom 12.02.2026). Für einen anderen Studiengang
+genügt eine eigene CSV im selben Format via `--curriculum`.
+
+### Prüfungstermine
+
+Klausuren stehen nicht im Lehrveranstaltungskalender: Sie liegen nach der
+Vorlesungszeit und haben eigene, deutlich frühere Anmeldefristen.
+
+```bash
+python3 -m tumcal exams --input pruefungen.txt --conflicts
+```
+
+Gelesen werden Termin, Uhrzeit, Räume, Prüfende, Anmeldezeitraum und
+Abmeldefrist; Wiederholungstermine werden als solche erkannt. Mehrere
+Prüfungen am selben Tag werden hervorgehoben, auch wenn sie sich zeitlich
+nicht überschneiden.
+
 ### Konfliktfreie Kombinationen finden
 
 Bei mehreren Übungsschienen mit je einem Dutzend Gruppen ist die Frage nicht
@@ -219,6 +252,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-92 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
-zwei TUMonline-Kopien und Modulbeschreibungen (öffentliches LV-Angebot, keine
-persönlichen Daten).
+106 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
+Lehrangebot, keine persönlichen Daten).

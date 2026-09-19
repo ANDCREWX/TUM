@@ -104,6 +104,8 @@ class CourseOption:
     url: str = ""
     deadline: date | None = None
     note: str = ""
+    registration_start: date | None = None
+    withdraw_until: date | None = None
     participants: int | None = None   # aktuell angemeldet
     capacity: int | None = None       # Platzobergrenze
     # Liegen konkrete Termine vor, haben sie Vorrang vor Wochentag/Rhythmus:

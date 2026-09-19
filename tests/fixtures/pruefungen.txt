@@ -1,0 +1,84 @@
+Titel
+Diskrete Strukturen
+Nummer
+IN0015
+Art
+Fach (FA)
+Semesterwochenstunden
+6
+ECTS-Credits
+8
+Angeboten im Semester
+Wintersemester 2026/27
+Organisation
+Department of Computer Science
+Prüfungstermine und Anmeldung
+15
+FEB 2027
+17:00 - 19:00
+MW 2001 Rudolf-Diesel-Hörsaal (5510.02.001)
+MW 0001, Hörsaal (5510.EG.001)
+1200, Carl-von-Linde-Hörsaal (0502.01.200)
+0980, Audimax (0509.EG.980)
+Prüfer*in:
+Brandt, Felix
+Berechtigte Person für Prüfungsplanung/Abwicklung:
+Frank, Fabian
+Keller, Anja
+Organisation
+[TUS1DP2 ] Department of Computer Science
+Anmeldezeitraum
+16.11.2026, 00:00 - 15.01.2027, 23:59
+Abmeldung bis
+08.02.2027, 23:59
+Nicht angemeldet
+02
+APR 2027
+17:00 - 19:00
+MW 2001 Rudolf-Diesel-Hörsaal (5510.02.001)
+MW 0001, Hörsaal (5510.EG.001)
+Prüfer*in:
+Brandt, Felix
+Berechtigte Person für Prüfungsplanung/Abwicklung:
+Frank, Fabian
+Keller, Anja
+Organisation
+[TUS1DP2 ] Department of Computer Science
+Anmeldezeitraum
+08.03.2027, 00:00 - 22.03.2027, 23:59
+Abmeldung bis
+26.03.2027, 23:59
+
+Titel
+Campus Munich: Economics I: Microeconomics
+Nummer
+WI000021EM
+Art
+Fach (FA)
+Semesterwochenstunden
+4
+ECTS-Credits
+6
+Angeboten im Semester
+Wintersemester 2026/27
+Prüfungstermine und Anmeldung
+15
+FEB 2027
+08:00 - 10:00
+0220, Hörsaal m. Exp.-Bühne (0502.EG.220)
+2300, Friedrich von Thiersch Hörsaal (0503.02.300)
+1200, Carl-von-Linde-Hörsaal (0502.01.200)
+N 1070 ZG, Lothar-Rohde-Hörsaal (0101.Z1.070)
+N 1179, Wilhelm-Nusselt-Hörsaal (0101.02.179)
+N 1189, Hans-Piloty-Hörsaal (0101.02.189)
+N 1190, Hans-Heinrich-Meinke-Hörsaal (0101.02.190)
+0980, Audimax (0509.EG.980)
+2750, Karl Max von Bauernfeind Hörsaal (0507.03.750)
+Prüfer*in:
+Tonke, Sebastian
+Organisation
+[TUS6EVE ] Professur für Environmental Economics
+Anmeldezeitraum
+16.11.2026, 00:00 - 15.01.2027, 23:59
+Abmeldung bis
+08.02.2027, 23:59
