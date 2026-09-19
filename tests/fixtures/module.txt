@@ -1,0 +1,198 @@
+Überblick
+Name
+Economics I - Microeconomics
+Modulkennung
+WI000021_E
+ECTS-Credits
+6 Credits können je nach SPO-Version variieren
+Version
+S_M
+Gültig
+Immer
+Modulverantwortliche*r
+Ikonnikova, Svetlana
+Organisation
+Professur für Resource Economics (Prof. Ikonnikova)
+Lehrveranstaltungen und Prüfungen
+Lehrveranstaltungen
+Economics I - Lecture
+1.
+SEMESTER
+Economics I Exercise - English
+-
+SEMESTER
+Prüfungen
+Economics I - Microeconomics (Prüfung auf englisch)
+6
+Credits
+1.
+SEMESTER
+Beschreibung
+Alle zuklappen
+Allgemeine Daten (Modulhandbuch)
+Modulniveau
+Bachelor
+Kürzel
+VWL 1
+Untertitel
+Mikroökonomik
+Moduldauer
+Einsemestrig
+Turnus
+Wintersemester
+Sprache
+Englisch
+Zugehörige Programme
+-
+Arbeitsaufwand (Work Load)
+Gesamtstunden
+180
+Präsenzstunden
+60
+Eigenstudiumstunden
+120
+
+Überblick
+Name
+Diskrete Strukturen
+Modulkennung
+IN0015
+ECTS-Credits
+8 Credits können je nach SPO-Version variieren
+Version-
+Gültig
+Immer
+Modulverantwortliche*r
+Esparza Estaun, Francisco Javier
+Organisation
+Department of Computer Science
+Lehrveranstaltungen und Prüfungen
+Lehrveranstaltungen
+Diskrete Strukturen (IN0015)
+3.
+SEMESTER
+Tutorübungen zu Diskrete Strukturen (IN0015)
+-
+SEMESTER
+Prüfungen
+Diskrete Strukturen
+8
+Credits
+1.
+SEMESTER
+Beschreibung
+Alle zuklappen
+Allgemeine Daten (Modulhandbuch)
+Modulniveau
+Bachelor
+Moduldauer
+Einsemestrig
+Turnus
+Wintersemester
+Sprache
+Deutsch
+Zugehörige Programme
+-
+Arbeitsaufwand (Work Load)
+Gesamtstunden
+240
+Präsenzstunden
+90
+Eigenstudiumstunden
+150
+
+Überblick
+Name
+Einführung in die Wirtschaftsinformatik
+Modulkennung
+IN0021
+ECTS-Credits
+5 Credits können je nach SPO-Version variieren
+Version-
+Gültig
+Immer
+Modulverantwortliche*r
+Rinderle-Ma, Stefanie
+Organisation
+Department of Computer Science
+Lehrveranstaltungen und Prüfungen
+Lehrveranstaltungen
+Einführung in die Wirtschaftsinformatik (IN0021)
+1.
+SEMESTER
+Tutorübungen zu Einführung in die Wirtschaftsinformatik (IN0021)
+-
+SEMESTER
+Prüfungen
+Einführung in die Wirtschaftsinformatik
+5
+Credits
+1.
+SEMESTER
+Beschreibung
+Alle zuklappen
+Allgemeine Daten (Modulhandbuch)
+Modulniveau
+Bachelor
+Moduldauer
+Einsemestrig
+Turnus
+Wintersemester
+Sprache
+Deutsch
+Zugehörige Programme
+-
+Arbeitsaufwand (Work Load)
+Gesamtstunden
+150
+Präsenzstunden
+60
+Eigenstudiumstunden
+90
+
+Überblick
+Name
+Financial Accounting
+Modulkennung
+WI001059_E
+ECTS-Credits
+6 Credits können je nach SPO-Version variieren
+Version
+S_M
+Gültig
+Immer
+Modulverantwortliche*r
+Ernstberger, Jürgen
+Organisation
+Lehrstuhl für Financial Accounting (Prof. Ernstberger)
+Lehrveranstaltungen und Prüfungen
+Lehrveranstaltungen
+Financial Accounting (Bachelor)
+-
+SEMESTER
+Prüfungen
+Financial Accounting (Prüfung auf englisch)
+6
+Credits
+-
+SEMESTER
+Beschreibung
+Alle zuklappen
+Allgemeine Daten (Modulhandbuch)
+Modulniveau
+Bachelor
+Moduldauer
+Einsemestrig
+Turnus
+Wintersemester
+Sprache
+Englisch
+Zugehörige Programme
+-
+Arbeitsaufwand (Work Load)
+Gesamtstunden
+180
+Präsenzstunden
+60
+Eigenstudiumstunden
+120

@@ -133,6 +133,29 @@ In der Planungsansicht:
 - **Anmelde-Checkliste** mit Direktlinks nach TUMonline
 - Export der Auswahl als `auswahl.json` und als `.ics`
 
+### Modulbeschreibungen einlesen
+
+Der LV-Katalog sagt, *wann* etwas stattfindet. Die Modulbeschreibung sagt,
+*was überhaupt dazugehört* — und deckt damit auf, welche Lehrveranstaltung im
+eigenen Plan noch fehlt.
+
+```bash
+python3 -m tumcal modules --input module.txt --catalog paste.txt
+python3 -m tumcal plan --catalog paste.txt --modules module.txt --open
+```
+
+Gelesen werden Modulkennung, ECTS, Sprache, Niveau, Präsenz- und
+Gesamtstunden, die zugehörigen Lehrveranstaltungen und die Prüfungen. Die Art
+jeder LV wird aus ihrem Namen erschlossen (`Tutorübungen zu …` → Übung,
+`… - Lecture` → Vorlesung). Fehlt zu einem Modul eine Art im Katalog, wird das
+gemeldet — eine Vorlesung mit integrierter Übung (`VI`) deckt den Übungsteil
+mit ab.
+
+ECTS hängen am Modul, nicht an der Gruppe: sie werden an alle Einträge des
+Moduls geschrieben, in der Summe aber je Modul nur einmal gezählt. Die
+angezeigte Punktzahl ändert sich dadurch nicht, wenn du die Übungsgruppe
+wechselst.
+
 ### Konfliktfreie Kombinationen finden
 
 Bei mehreren Übungsschienen mit je einem Dutzend Gruppen ist die Frage nicht
@@ -196,5 +219,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-78 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot
-und zwei echte TUMonline-Kopien (öffentliches LV-Angebot, keine persönlichen Daten).
+92 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+zwei TUMonline-Kopien und Modulbeschreibungen (öffentliches LV-Angebot, keine
+persönlichen Daten).

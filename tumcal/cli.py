@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .catalog import (
     CatalogError,
+    CourseOption,
     NoOptionLeft,
     combinations,
     CourseOption,
@@ -19,6 +20,7 @@ from .catalog import (
     load_catalog,
 )
 from .fetch import ENV_VAR, FetchError, fetch_ics, read_ics, resolve_url, save_url
+from .module import apply_ects, ects_total, missing_lectures, parse_modules
 from .planner import render_planner
 from .semester import SEMESTERS, get_semester
 from .model import TYPE_LABELS, filter_events, load_events
@@ -119,8 +121,56 @@ def _read_selection(path: str | None, options: list[CourseOption]) -> list[Cours
     return chosen
 
 
+def _mit_modulen(options: list[CourseOption], pfad: str | None) -> list[CourseOption]:
+    """ECTS aus den Modulbeschreibungen ergänzen und Lücken melden."""
+    if not pfad:
+        return options
+    module = parse_modules(Path(pfad).read_text(encoding="utf-8", errors="replace"))
+    if not module:
+        print(f"Warnung: in {pfad} keine Modulbeschreibung erkannt.", file=sys.stderr)
+        return options
+
+    fehlend = missing_lectures(options, module)
+    if fehlend:
+        print("FEHLENDE LEHRVERANSTALTUNGEN (laut Modulbeschreibung):")
+        for modul, name, kind in fehlend:
+            print(f"  {modul.code}: {name} [{kind}]")
+        print("  → nicht im Katalog, taucht daher in keiner Planung auf.\n")
+    return apply_ects(options, module)
+
+
+def cmd_modules(args) -> int:
+    module = parse_modules(Path(args.input).read_text(encoding="utf-8", errors="replace"))
+    if not module:
+        print("Keine Modulbeschreibung erkannt.", file=sys.stderr)
+        return 2
+
+    for modul in module:
+        print(f"{modul.code:<12} {modul.name}")
+        print(f"{'':12} {modul.ects:g} ECTS · {modul.language or '?'} · "
+              f"{modul.presence_hours}h Präsenz / {modul.total_hours}h gesamt · {modul.responsible}")
+        for name, kind in modul.expected:
+            print(f"{'':12} LV  [{kind}] {name}")
+        for pruefung in modul.exams:
+            print(f"{'':12} Prüfung  {pruefung}")
+        print()
+    print(f"{len(module)} Module, {sum(m.ects for m in module):g} ECTS, "
+          f"{sum(m.presence_hours for m in module)} Präsenzstunden.")
+
+    if args.catalog:
+        fehlend = missing_lectures(load_catalog(args.catalog), module)
+        print()
+        if fehlend:
+            print("Im Katalog fehlen:")
+            for modul, name, kind in fehlend:
+                print(f"  {modul.code}: {name} [{kind}]")
+            return 1
+        print("Alle Lehrveranstaltungen der Module sind im Katalog vorhanden.")
+    return 0
+
+
 def cmd_plan(args) -> int:
-    options = load_catalog(args.catalog)
+    options = _mit_modulen(load_catalog(args.catalog), args.modules)
     semester = get_semester(args.semester)
     vorauswahl = [o.key for o in _read_selection(args.select, options)] if args.select else []
     out = Path(args.out)
@@ -212,7 +262,7 @@ def _parse_uhrzeit(value: str | None):
 
 def cmd_combos(args) -> int:
     """Konfliktfreie Kombinationen aus allen Gruppenalternativen."""
-    options = load_catalog(args.catalog)
+    options = _mit_modulen(load_catalog(args.catalog), args.modules)
     semester = get_semester(args.semester)
     not_before = _parse_uhrzeit(args.not_before)
 
@@ -272,7 +322,9 @@ def cmd_combos(args) -> int:
         combo = min(gruppe, key=lambda c: c.total_size) if args.prefer_small else gruppe[0]
         leerlauf = f"{combo.gap_minutes // 60}h{combo.gap_minutes % 60:02d}"
         varianten = f", {len(gruppe)} Raumvarianten" if len(gruppe) > 1 else ""
-        groesse = f", {combo.total_size} Personen gesamt" if combo.total_size else ""
+        punkte = ects_total(combo.options)
+        groesse = (f", {combo.total_size} Personen gesamt" if combo.total_size else "")
+        groesse += f", {punkte:g} ECTS" if punkte else ""
         print(f"[{index}] {combo.days} Tage/Woche, {leerlauf} Leerlauf pro Woche"
               f"{groesse}{varianten}")
         if not_before:
@@ -373,6 +425,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--out", default="planung.html")
     plan.add_argument("--title", default="LV-Planung")
     plan.add_argument("--select", help="auswahl.json: diese Einträge vorauswählen")
+    plan.add_argument("--modules", help="Modulbeschreibungen: ECTS ergänzen, Lücken melden")
     plan.add_argument("--open", action="store_true", help="Danach im Browser öffnen")
     plan.set_defaults(func=cmd_plan)
 
@@ -402,6 +455,7 @@ def build_parser() -> argparse.ArgumentParser:
     combos.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     combos.add_argument("--top", type=int, default=5, help="Wie viele anzeigen (Standard: 5)")
     combos.add_argument("--limit", type=int, default=20000, help="Obergrenze geprüfter Kombinationen")
+    combos.add_argument("--modules", help="Modulbeschreibungen: ECTS ergänzen, Lücken melden")
     combos.add_argument("--not-before", help="Keine wählbare Gruppe vor dieser Uhrzeit (HH:MM)")
     combos.add_argument("--prefer-small", action="store_true",
                         help="Kleine Gruppen vor geringem Leerlauf einsortieren")
@@ -414,6 +468,13 @@ def build_parser() -> argparse.ArgumentParser:
     anmelden.add_argument("--select", help="auswahl.json aus dem Planer")
     anmelden.add_argument("--open", action="store_true", help="Seiten im Browser öffnen")
     anmelden.set_defaults(func=cmd_anmelden)
+
+    modules = sub.add_parser(
+        "modules", help="Modulbeschreibungen auswerten und mit dem Katalog abgleichen"
+    )
+    modules.add_argument("--input", required=True, help="Kopierte Modulbeschreibungen")
+    modules.add_argument("--catalog", help="Katalog gegenprüfen: welche LV fehlt?")
+    modules.set_defaults(func=cmd_modules)
 
     config = sub.add_parser("config", help="iCal-URL dauerhaft speichern")
     config.add_argument("--url", required=True, help="TUMonline iCal-Token-URL")

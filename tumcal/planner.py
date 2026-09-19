@@ -25,6 +25,7 @@ def options_to_json(options: list[CourseOption], semester: Semester) -> list[dic
                 "kindLabel": option.kind_label,
                 "color": KIND_COLORS.get(option.kind, "--c-other"),
                 "ects": option.ects,
+                "moduleKey": option.module or option.title,
                 "group": option.group,
                 "room": option.room,
                 "lecturer": option.lecturer,
@@ -310,8 +311,11 @@ function renderSummary() {
   });
 
   document.getElementById("nSel").textContent = sel.length;
+  // ECTS gehören zum Modul: Vorlesung und Übung zählen zusammen einmal.
+  const proModul = {};
+  sel.forEach((o) => { if (o.ects) proModul[o.moduleKey] = o.ects; });
   document.getElementById("nEcts").textContent =
-    sel.reduce((sum, o) => sum + (o.ects || 0), 0).toString().replace(".", ",");
+    Object.values(proModul).reduce((a, b) => a + b, 0).toString().replace(".", ",");
   document.getElementById("nConf").textContent = uniqueConf.length;
 
   const doppelt = {};
