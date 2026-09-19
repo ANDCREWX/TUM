@@ -61,6 +61,16 @@ class CatalogError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class Slot:
+    """Ein konkreter, aus TUMonline übernommener Einzeltermin."""
+
+    day: date
+    start: time
+    end: time
+    room: str = ""
+
+
+@dataclass(frozen=True)
 class CourseOption:
     """Eine anmeldbare Lehrveranstaltung bzw. Übungsgruppe."""
 
@@ -81,6 +91,9 @@ class CourseOption:
     url: str = ""
     deadline: date | None = None
     note: str = ""
+    # Liegen konkrete Termine vor, haben sie Vorrang vor Wochentag/Rhythmus:
+    # TUMonline kennt Ausfalltermine und Raumwechsel, die keine Regel abbildet.
+    slots: tuple[Slot, ...] = ()
 
     @property
     def kind_label(self) -> str:
@@ -103,10 +116,14 @@ class CourseOption:
 
     @property
     def slots_known(self) -> bool:
+        if self.slots:
+            return True
         return self.start_time is not None and self.end_time is not None
 
     def occurrences(self, semester: Semester) -> list[date]:
         """Konkrete Termine über die Vorlesungszeit."""
+        if self.slots:
+            return sorted({slot.day for slot in self.slots})
         if self.weekday is None:
             return [self.first_date] if self.first_date else []
 
@@ -123,29 +140,33 @@ class CourseOption:
         return days
 
     def events(self, semester: Semester) -> list[CourseEvent]:
+        if self.slots:
+            return [self._event(s.day, s.start, s.end, s.room) for s in sorted(
+                self.slots, key=lambda s: (s.day, s.start))]
         if self.start_time is None or self.end_time is None:
             return []
-        out: list[CourseEvent] = []
-        for day in self.occurrences(semester):
-            start = datetime.combine(day, self.start_time, tzinfo=BERLIN)
-            end = datetime.combine(day, self.end_time, tzinfo=BERLIN)
-            if end <= start:  # über Mitternacht ist im LV-Betrieb nicht vorgesehen
-                end = start + timedelta(hours=2)
-            out.append(
-                CourseEvent(
-                    summary=self.label,
-                    title=self.title,
-                    start=start,
-                    end=end,
-                    location=self.room,
-                    room=extract_room(self.room),
-                    course_code=self.module or self.lv_id,
-                    kind=self.kind,
-                    lecturer=self.lecturer,
-                    description=self.note,
-                )
-            )
-        return out
+        return [
+            self._event(day, self.start_time, self.end_time, self.room)
+            for day in self.occurrences(semester)
+        ]
+
+    def _event(self, day: date, start_time: time, end_time: time, room: str) -> CourseEvent:
+        start = datetime.combine(day, start_time, tzinfo=BERLIN)
+        end = datetime.combine(day, end_time, tzinfo=BERLIN)
+        if end <= start:  # über Mitternacht ist im LV-Betrieb nicht vorgesehen
+            end = start + timedelta(hours=2)
+        return CourseEvent(
+            summary=self.label,
+            title=self.title,
+            start=start,
+            end=end,
+            location=room,
+            room=extract_room(room),
+            course_code=self.module or self.lv_id,
+            kind=self.kind,
+            lecturer=self.lecturer,
+            description=self.note,
+        )
 
 
 def _normalize_header(name: str) -> str:
@@ -292,7 +313,34 @@ def load_catalog_json(text: str) -> list[CourseOption]:
     mapping = _map_headers(sorted({key for row in rows for key in row}))
     if "title" not in mapping:
         raise CatalogError("JSON enthält kein erkennbares Titelfeld.")
-    return [opt for row in rows if (opt := _row_to_option(row, mapping))]
+
+    options: list[CourseOption] = []
+    for item, row in zip(data, rows):
+        option = _row_to_option(row, mapping)
+        if option is None:
+            continue
+        raw_slots = item.get("slots") if isinstance(item, dict) else None
+        if isinstance(raw_slots, list) and raw_slots:
+            slots = tuple(
+                Slot(
+                    day=parse_date_value(str(s.get("date", ""))),
+                    start=parse_time(str(s.get("start", ""))),
+                    end=parse_time(str(s.get("end", ""))),
+                    room=str(s.get("room", "")),
+                )
+                for s in raw_slots
+                if parse_date_value(str(s.get("date", "")))
+                and parse_time(str(s.get("start", "")))
+                and parse_time(str(s.get("end", "")))
+            )
+            option = replace(option, slots=slots)
+        options.append(option)
+    return options
+
+
+def looks_like_paste(text: str) -> bool:
+    """Aus TUMonline kopierter Text statt Tabelle?"""
+    return len(re.findall(r"^\s*Termin\s+", text, flags=re.MULTILINE)) >= 2
 
 
 def load_catalog(path: str | Path) -> list[CourseOption]:
@@ -300,6 +348,16 @@ def load_catalog(path: str | Path) -> list[CourseOption]:
     text = path.read_text(encoding="utf-8-sig", errors="replace")
     if path.suffix.lower() == ".json" or text.lstrip()[:1] in "[{":
         return load_catalog_json(text)
+    if looks_like_paste(text):
+        from .paste import parse_paste
+
+        options = parse_paste(text)
+        if not options:
+            raise CatalogError(
+                "Der Text sieht nach einer TUMonline-Kopie aus, enthält aber keine "
+                "erkennbaren Veranstaltungen. Bitte Kopfzeile der LV mitkopieren."
+            )
+        return options
     return load_catalog_csv(text)
 
 

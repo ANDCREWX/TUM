@@ -132,6 +132,23 @@ def cmd_plan(args) -> int:
     return 0
 
 
+def cmd_convert(args) -> int:
+    """Aus TUMonline kopierten Text in einen speicherbaren Katalog überführen."""
+    from .paste import to_json_catalog
+
+    options = load_catalog(args.input)
+    out = Path(args.out)
+    out.write_text(
+        json.dumps(to_json_catalog(options), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    termine = sum(len(o.slots) or len(o.occurrences(get_semester(args.semester))) for o in options)
+    print(f"{len(options)} Veranstaltungen, {termine} Termine → {out.resolve()}")
+    for option in options:
+        print(f"  {option.kind_label:<12} {option.label}  ({len(option.slots)} Termine)")
+    return 0
+
+
 def cmd_template(args) -> int:
     out = Path(args.out)
     if out.exists() and not args.force:
@@ -245,6 +262,14 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--title", default="LV-Planung")
     plan.add_argument("--open", action="store_true", help="Danach im Browser öffnen")
     plan.set_defaults(func=cmd_plan)
+
+    convert = sub.add_parser(
+        "convert", help="Aus TUMonline kopierten Text in einen Katalog (JSON) umwandeln"
+    )
+    convert.add_argument("--input", required=True, help="Textdatei mit der TUMonline-Kopie")
+    convert.add_argument("--out", default="lv-angebot.json")
+    convert.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
+    convert.set_defaults(func=cmd_convert)
 
     template = sub.add_parser("template", help="Leere Katalog-Vorlage schreiben")
     template.add_argument("--out", default="lv-angebot.csv")

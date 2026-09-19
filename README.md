@@ -87,7 +87,27 @@ Solange du noch für nichts angemeldet bist, ist der persönliche Kalender leer.
 Für diesen Fall gibt es die **Planungsansicht**: das mögliche LV-Angebot als
 Wochenkalender, zum Anklicken, mit Überschneidungsprüfung.
 
-Das Angebot ist in TUMonline **kein iCal-Feed** — es muss als Tabelle vorliegen:
+### Variante A: aus TUMonline kopieren (am einfachsten)
+
+In TUMonline die LV-Liste mit aufgeklappten Terminen markieren, kopieren, in
+eine Textdatei speichern — fertig. Der Parser versteht das Rohformat inklusive
+Bedienelementen („weniger anzeigen", „Präferenz bearbeiten"):
+
+```bash
+python3 -m tumcal plan --catalog paste.txt --open          # direkt planen
+python3 -m tumcal convert --input paste.txt --out lv.json  # oder speichern
+```
+
+Erkannt werden LV-Nummer, Modulkennung, Art, Gruppen, Dozierende,
+Teilnehmerzahl und alle Einzeltermine mit Raum. Parallel gelistete Räume
+(Hörsaal + Übertragungsraum) werden zu einem Termin zusammengefasst.
+
+Einzeltermine haben Vorrang vor jeder Hochrechnung: Ausfalltage, Raumwechsel
+und einmalig verschobene Uhrzeiten bleiben so erhalten.
+
+### Variante B: als Tabelle
+
+Das Angebot ist in TUMonline **kein iCal-Feed** — alternativ als Tabelle:
 
 ```bash
 python3 -m tumcal template --out lv-angebot.csv   # Vorlage erzeugen
@@ -146,5 +166,5 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-41 Tests gegen die Fixtures in `tests/fixtures/` — künstliche Daten im
-TUMonline-Format, keine echten Termine.
+56 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot
+und eine echte TUMonline-Kopie (öffentliches LV-Angebot, keine persönlichen Daten).
