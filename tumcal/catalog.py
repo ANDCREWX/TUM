@@ -12,6 +12,7 @@ import io
 import json
 import re
 from dataclasses import dataclass, field, replace
+from itertools import product
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
@@ -113,6 +114,16 @@ class CourseOption:
             return f"{self.title} ({self.kind_label})"
         group = self.group if self.group.lower().startswith("gruppe") else f"Gruppe {self.group}"
         return f"{self.title} ({self.kind_label}) · {group}"
+
+    @property
+    def exclusive_key(self) -> str:
+        """Gruppen derselben Veranstaltung schließen einander aus.
+
+        Leer, wenn die LV nur eine Gruppe hat - dann ist nichts zu wählen.
+        """
+        if not self.group:
+            return ""
+        return f"{self.module or self.lv_id or self.title}|{self.kind}"
 
     @property
     def slots_known(self) -> bool:
@@ -405,6 +416,92 @@ def find_conflicts(options: list[CourseOption], semester: Semester) -> list[Conf
                 )
             )
     return conflicts
+
+
+@dataclass
+class Combination:
+    """Eine konfliktfreie Auswahl: je eine Gruppe pro Wahlpflichtblock."""
+
+    options: list[CourseOption]
+    days: int
+    gap_minutes: int          # Leerlauf zwischen Terminen, Schnitt pro Woche
+
+    @property
+    def groups(self) -> list[CourseOption]:
+        return [o for o in self.options if o.group]
+
+    def shape(self, semester: Semester) -> tuple:
+        """Zeitliche Signatur - Kombinationen, die sich nur im Raum
+        unterscheiden, sind für die Planung dieselbe Woche."""
+        slots = set()
+        for option in self.groups:
+            for event in option.events(semester):
+                slots.add((event.start.weekday(), event.start.strftime("%H:%M"),
+                           event.end.strftime("%H:%M"), option.exclusive_key))
+        return tuple(sorted(slots))
+
+
+def _day_shape(options: list[CourseOption], semester: Semester) -> tuple[int, int]:
+    """Anzahl belegter Wochentage und Leerlauf zwischen Terminen."""
+    per_day: dict[date, list[tuple[time, time]]] = {}
+    for option in options:
+        for event in option.events(semester):
+            per_day.setdefault(event.day, []).append((event.start.time(), event.end.time()))
+
+    weekdays = {day.weekday() for day in per_day}
+    gaps = 0
+    for spans in per_day.values():
+        spans.sort()
+        for (_, end), (start, _) in zip(spans, spans[1:]):
+            if start > end:
+                gaps += (start.hour * 60 + start.minute) - (end.hour * 60 + end.minute)
+
+    wochen = len({(day.isocalendar()[0], day.isocalendar()[1]) for day in per_day}) or 1
+    return len(weekdays), round(gaps / wochen)
+
+
+def combinations(
+    options: list[CourseOption], semester: Semester, limit: int = 2000
+) -> tuple[list[Combination], int]:
+    """Alle konfliktfreien Kombinationen; je eine Gruppe pro Wahlblock.
+
+    Gibt zusätzlich zurück, wie viele Kombinationen insgesamt geprüft wurden.
+    """
+    blocks: dict[str, list[CourseOption]] = {}
+    fixed: list[CourseOption] = []
+    for option in options:
+        if option.exclusive_key:
+            blocks.setdefault(option.exclusive_key, []).append(option)
+        else:
+            fixed.append(option)
+
+    if not blocks:
+        conflicts = find_conflicts(fixed, semester)
+        if conflicts:
+            return [], 1
+        days, gaps = _day_shape(fixed, semester)
+        return [Combination(options=list(fixed), days=days, gap_minutes=gaps)], 1
+
+    keys = sorted(blocks)
+    total = 1
+    for key in keys:
+        total *= len(blocks[key])
+
+    found: list[Combination] = []
+    checked = 0
+    for picks in product(*(blocks[key] for key in keys)):
+        checked += 1
+        if checked > limit:
+            break
+        selection = fixed + list(picks)
+        if find_conflicts(selection, semester):
+            continue
+        days, gaps = _day_shape(selection, semester)
+        found.append(Combination(options=selection, days=days, gap_minutes=gaps))
+
+    # Kompakte Wochen zuerst: wenige Tage, wenig Leerlauf.
+    found.sort(key=lambda c: (c.days, c.gap_minutes))
+    return found, total
 
 
 TEMPLATE_CSV = """\

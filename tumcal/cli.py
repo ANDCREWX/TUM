@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .catalog import (
     CatalogError,
+    combinations,
     CourseOption,
     TEMPLATE_CSV,
     find_conflicts,
@@ -180,6 +181,60 @@ def cmd_conflicts(args) -> int:
     return 1
 
 
+WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+
+def _woche(option, semester) -> str:
+    events = option.events(semester)
+    if not events:
+        return "keine Termine"
+    first = events[0]
+    tage = sorted({WOCHENTAGE[e.day.weekday()] for e in events})
+    return f"{'/'.join(tage)} {first.start:%H:%M}-{first.end:%H:%M}"
+
+
+def cmd_combos(args) -> int:
+    """Konfliktfreie Kombinationen aus allen Gruppenalternativen."""
+    options = load_catalog(args.catalog)
+    semester = get_semester(args.semester)
+    found, total = combinations(options, semester, limit=args.limit)
+
+    bloecke: dict[str, int] = {}
+    for option in options:
+        if option.exclusive_key:
+            bloecke[option.exclusive_key] = bloecke.get(option.exclusive_key, 0) + 1
+    for key, anzahl in sorted(bloecke.items()):
+        print(f"Wahlblock {key.split('|')[0]} ({key.split('|')[1]}): {anzahl} Gruppen")
+    print(f"\n{total} mögliche Kombinationen, davon {len(found)} konfliktfrei.\n")
+
+    if not found:
+        print("Keine konfliktfreie Kombination gefunden.")
+        return 1
+
+    # Kombinationen, die sich nur im Seminarraum unterscheiden, zusammenfassen.
+    nach_form: dict[tuple, list] = {}
+    for combo in found:
+        nach_form.setdefault(combo.shape(semester), []).append(combo)
+    formen = sorted(nach_form.values(), key=lambda g: (g[0].days, g[0].gap_minutes))
+    print(f"{len(formen)} davon zeitlich verschieden (der Rest unterscheidet sich nur im Raum).\n")
+
+    for index, gruppe in enumerate(formen[: args.top], 1):
+        combo = gruppe[0]
+        leerlauf = f"{combo.gap_minutes // 60}h{combo.gap_minutes % 60:02d}"
+        varianten = f", {len(gruppe)} Raumvarianten" if len(gruppe) > 1 else ""
+        print(f"[{index}] {combo.days} Tage/Woche, {leerlauf} Leerlauf pro Woche{varianten}")
+        for option in combo.groups:
+            raeume = sorted({c_o.group for c in gruppe for c_o in c.groups
+                             if c_o.exclusive_key == option.exclusive_key})
+            alternativen = f"  (+{len(raeume) - 1} weitere)" if len(raeume) > 1 else ""
+            print(f"      {option.title[:42]:<42} {_woche(option, semester):<18}"
+                  f" {option.group}{alternativen}")
+        print()
+    if len(formen) > args.top:
+        print(f"… und {len(formen) - args.top} weitere Zeitvarianten. Mit --top mehr anzeigen.")
+    return 0
+
+
 def cmd_anmelden(args) -> int:
     """Öffnet die TUMonline-Seiten der Auswahl - der Klick bleibt bei dir."""
     options = _read_selection(args.select, load_catalog(args.catalog))
@@ -281,6 +336,15 @@ def build_parser() -> argparse.ArgumentParser:
     conflicts.add_argument("--select", help="auswahl.json aus dem Planer")
     conflicts.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     conflicts.set_defaults(func=cmd_conflicts)
+
+    combos = sub.add_parser(
+        "combos", help="Konfliktfreie Kombinationen der Gruppenalternativen suchen"
+    )
+    combos.add_argument("--catalog", required=True)
+    combos.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
+    combos.add_argument("--top", type=int, default=5, help="Wie viele anzeigen (Standard: 5)")
+    combos.add_argument("--limit", type=int, default=20000, help="Obergrenze geprüfter Kombinationen")
+    combos.set_defaults(func=cmd_combos)
 
     anmelden = sub.add_parser(
         "anmelden", help="Anmeldelinks der Auswahl auflisten bzw. nacheinander öffnen"

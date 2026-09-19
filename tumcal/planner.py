@@ -32,9 +32,7 @@ def options_to_json(options: list[CourseOption], semester: Semester) -> list[dic
                 "deadline": option.deadline.isoformat() if option.deadline else "",
                 "note": option.note,
                 # Gruppen derselben Veranstaltung schließen einander aus.
-                "exclusive": f"{option.module or option.lv_id or option.title}|{option.kind}"
-                if option.group
-                else "",
+                "exclusive": option.exclusive_key,
                 "slots": [
                     {
                         "date": e.day.isoformat(),
@@ -77,6 +75,9 @@ _EXTRA_CSS = r"""
   .panel { background: var(--surface); border: 1px solid var(--border);
            border-radius: 12px; padding: 14px; }
   .panel h2 { font-size: 15px; margin: 0 0 10px; }
+  /* Bei vielen Übungsgruppen darf die Liste den Kalender nicht wegschieben. */
+  #options { max-height: 62vh; overflow-y: auto; }
+  @media (max-width: 960px) { #options { max-height: none; } }
   .opt { display: flex; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--border);
          align-items: flex-start; font-size: 13.5px; cursor: pointer; }
   .opt:last-child { border-bottom: none; }

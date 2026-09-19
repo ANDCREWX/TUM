@@ -101,6 +101,10 @@ python3 -m tumcal convert --input paste.txt --out lv.json  # oder speichern
 Erkannt werden LV-Nummer, Modulkennung, Art, Gruppen, Dozierende,
 Teilnehmerzahl und alle Einzeltermine mit Raum. Parallel gelistete Räume
 (Hörsaal + Übertragungsraum) werden zu einem Termin zusammengefasst.
+Gruppen heißen dabei mal `Gruppe 1`, mal `Group 2`, mal `01-08xx-03.09.014` —
+alle drei Formen werden erkannt. Die unter „Gleiche LVs:" aufgezählten
+Querverweise auf Parallelschienen werden ignoriert, sie sind keine eigenen
+Veranstaltungen.
 
 Einzeltermine haben Vorrang vor jeder Hochrechnung: Ausfalltage, Raumwechsel
 und einmalig verschobene Uhrzeiten bleiben so erhalten.
@@ -127,6 +131,22 @@ In der Planungsansicht:
 - ECTS-Summe der Auswahl
 - **Anmelde-Checkliste** mit Direktlinks nach TUMonline
 - Export der Auswahl als `auswahl.json` und als `.ics`
+
+### Konfliktfreie Kombinationen finden
+
+Bei mehreren Übungsschienen mit je einem Dutzend Gruppen ist die Frage nicht
+„kollidiert das?", sondern „welche Kombinationen gehen überhaupt?".
+
+```bash
+python3 -m tumcal combos --catalog paste.txt --top 5
+```
+
+Gruppen derselben Veranstaltung (gleiches Modul, gleiche Art) gelten als
+Wahlblock: aus jedem wird genau eine Gruppe gezogen, fest stehende
+Veranstaltungen sind immer dabei. Ausgegeben werden die konfliktfreien
+Kombinationen, sortiert nach kompakter Woche (wenige Tage, wenig Leerlauf).
+Kombinationen, die sich nur im Seminarraum unterscheiden, werden
+zusammengefasst.
 
 Danach im Terminal:
 
@@ -166,5 +186,5 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-56 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot
-und eine echte TUMonline-Kopie (öffentliches LV-Angebot, keine persönlichen Daten).
+72 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot
+und zwei echte TUMonline-Kopien (öffentliches LV-Angebot, keine persönlichen Daten).

@@ -22,15 +22,23 @@ _TERMIN = re.compile(
 # "Raum N 1190, Hans-Heinrich-Meinke-Hörsaal (0101.02.190)"
 _RAUM = re.compile(r"^Raum\s+(?P<room>.+?)\s*$")
 # "Gruppe 1", "Gruppe A", "Standardgruppe"
-_GRUPPE = re.compile(r"^(?P<group>Standardgruppe|Gruppe\s+\S+)\s*$", re.IGNORECASE)
+_GRUPPE = re.compile(
+    r"^(?P<group>Standardgruppe|Standard group|(?:Gruppe|Group)\s+\S+)\s*$", re.IGNORECASE
+)
 # "(Teilnehmer*innen: 292 / max. unbegrenzt)"
-_TEILNEHMER = re.compile(r"Teilnehmer\*?innen:\s*(?P<count>\d+)")
+_TEILNEHMER = re.compile(
+    r"Teilnehmer\*?innen:\s*(?:(?P<count>\d+)|max\.?\s*(?P<max>\d+))", re.IGNORECASE
+)
 # Kopfzeile endet auf das LV-Kürzel: "... - Lecture - VO"
 _KOPF = re.compile(r"^(?P<rest>.+?)\s+-\s+(?P<kind>[A-Z]{2,3})\s*$")
+# "... - UEGleiche LVs:" -> der Verweisblock hängt ohne Trenner am Kürzel.
+_GLEICHE_LVS = re.compile(r"Gleiche\s+LVs:\s*$", re.IGNORECASE)
+# Nur ein Weekday-Zusatz bleibt im Titel stehen, alles andere fliegt raus.
+_WOCHENTAG_KLAMMER = re.compile(r"^\((Mo|Di|Mi|Do|Fr|Sa|So)\)$", re.IGNORECASE)
 # Modulkennung in Klammern: (IN0015), (WI000021_E, englisch)
 _MODUL = re.compile(r"\((?P<code>[A-Z]{2}\d{4,6}(?:_[A-Z])?)\b")
 # Führende LV-Nummer: "0240967009Diskrete Strukturen" oder "WI000021EVEconomics I"
-_LV_NUMMER = re.compile(r"^(?P<id>\d{6,}|[A-Z]{2}\d{6}[A-Z]{0,2})(?=[A-ZÄÖÜ(])")
+_LV_NUMMER = re.compile(r"^(?P<id>\d{6,}|[A-Z]{2}\d{6}[A-ZÄÖÜ]{0,2})(?=[A-ZÄÖÜ(])")
 
 # Zeilen, die in der Kopierausgabe nur Bedienelemente sind.
 _RAUSCHEN = {
@@ -61,7 +69,11 @@ def _clean_title(rest: str) -> tuple[str, str, str]:
     module_match = _MODUL.search(rest)
     module = module_match.group("code") if module_match else ""
 
-    title = re.sub(r"\([^)]*\)", " ", rest)                      # Klammerzusätze raus
+    def _klammer(match: re.Match) -> str:
+        # "(Mo)" trägt Information (Übungsschiene), "(IN0015)" nicht.
+        return match.group(0) if _WOCHENTAG_KLAMMER.match(match.group(0)) else " "
+
+    title = re.sub(r"\([^)]*\)", _klammer, rest)
     title = re.sub(r"\s+-\s+(Lecture|Vorlesung|Übung|Exercise|Practical)\s*$", "", title,
                    flags=re.IGNORECASE)
     title = re.sub(r"\s+", " ", title).strip(" -–—,;:")
@@ -147,24 +159,39 @@ def parse_paste(text: str) -> list[CourseOption]:
 
         teilnehmer = _TEILNEHMER.search(line)
         if teilnehmer and group is not None:
-            group["note"] = f"{teilnehmer.group('count')} Teilnehmende"
+            group["note"] = (
+                f"{teilnehmer.group('count')} Teilnehmende"
+                if teilnehmer.group("count")
+                else f"max. {teilnehmer.group('max')} Plätze"
+            )
             continue
 
         gruppe = _GRUPPE.match(line)
-        if gruppe and course is not None:
+        folgt_teilnehmerzahl = any(
+            _TEILNEHMER.search(f) for f in lines[index + 1 : index + 3] if f.strip()
+        )
+        if course is not None and (gruppe or (folgt_teilnehmerzahl and len(line) < 60)):
             flush_group()
-            name = gruppe.group("group")
+            name = gruppe.group("group") if gruppe else line
             group = {
-                "name": "" if name.lower() == "standardgruppe" else name,
+                "name": "" if name.lower().replace(" ", "") in
+                        ("standardgruppe", "standardgroup") else name,
                 "slots": [],
                 "note": "",
             }
+            pending_lecturers = False
             continue
 
-        kopf = _KOPF.match(line)
+        kopf = _KOPF.match(_GLEICHE_LVS.sub("", line).strip())
         if kopf and kopf.group("kind").isupper():
+            rest = kopf.group("rest")
+            # Eine echte Kopfzeile klebt die LV-Nummer an den Titel. Die unter
+            # "Gleiche LVs:" aufgezählten Verweise haben dort ein Leerzeichen -
+            # sie sind keine eigenen Veranstaltungen.
+            if rest[:1].isdigit() and not _LV_NUMMER.match(rest):
+                continue
             flush_group()
-            lv_id, title, module = _clean_title(kopf.group("rest"))
+            lv_id, title, module = _clean_title(rest)
             if not title:
                 continue
             course = {
