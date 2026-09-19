@@ -123,6 +123,17 @@ Vorlesungszeit des gewählten Semesters, wird das gemeldet. Sonst liefert eine
 LV aus einem anderen Semester einfach null Termine und verschwindet unbemerkt
 aus dem Kalender.
 
+Mit `--project` wird ein solcher Eintrag in das gewählte Semester übernommen —
+aber nur Wochentag und Uhrzeit, mehr lässt sich aus einem vergangenen Semester
+nicht seriös übertragen. Solche Termine heißen **[vorläufig]** und erscheinen
+im Kalender gestrichelt. Nützlich, wenn TUMonline die neue Instanz noch nicht
+veröffentlicht hat, man den Zeitslot aber schon einplanen will.
+
+**Präsenz statt Kalendertage:** Termine in Videokonferenzen oder reinen
+Online-Formaten werden erkannt. Die Kombinationssuche zählt deshalb
+*Präsenztage* getrennt von belegten Tagen und sortiert danach — ein reiner
+Online-Tag ist kein Uni-Besuch.
+
 Einzeltermine haben Vorrang vor jeder Hochrechnung: Ausfalltage, Raumwechsel
 und einmalig verschobene Uhrzeiten bleiben so erhalten.
 
@@ -275,6 +286,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-120 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+127 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).

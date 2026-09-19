@@ -106,6 +106,7 @@ class CourseOption:
     note: str = ""
     registration_start: date | None = None
     withdraw_until: date | None = None
+    provisional: bool = False         # Termin angenommen, nicht bestätigt
     participants: int | None = None   # aktuell angemeldet
     capacity: int | None = None       # Platzobergrenze
     # Liegen konkrete Termine vor, haben sie Vorrang vor Wochentag/Rhythmus:
@@ -126,10 +127,24 @@ class CourseOption:
 
     @property
     def label(self) -> str:
+        if self.provisional:
+            return self._label() + " [vorläufig]"
+        return self._label()
+
+    def _label(self) -> str:
         if not self.group:
             return f"{self.title} ({self.kind_label})"
         group = self.group if self.group.lower().startswith("gruppe") else f"Gruppe {self.group}"
         return f"{self.title} ({self.kind_label}) · {group}"
+
+    @property
+    def online(self) -> bool:
+        """Kein Weg an die Uni: Videokonferenz, Stream, reines Online-Format."""
+        orte = [self.room] + [slot.room for slot in self.slots]
+        text = " ".join(o for o in orte if o).lower()
+        return bool(text) and any(
+            wort in text for wort in ("online", "videokonferenz", "zoom", "digital", "stream")
+        )
 
     @property
     def size(self) -> int | None:
@@ -440,6 +455,51 @@ class Conflict:
         )
 
 
+def project_to_semester(
+    options: list[CourseOption], semester: Semester
+) -> list[CourseOption]:
+    """Rechnet Einträge aus einem anderen Semester auf die Vorlesungszeit um.
+
+    Übernommen werden nur Wochentag und Uhrzeit - das Einzige, was sich aus
+    einem vergangenen Semester überhaupt vernünftig übertragen lässt. Das
+    Ergebnis ist ausdrücklich als vorläufig gekennzeichnet.
+    """
+    fremd = {id(o) for o, _ in out_of_semester(options, semester)}
+    out: list[CourseOption] = []
+    for option in options:
+        if id(option) not in fremd:
+            out.append(option)
+            continue
+
+        wochentag = option.weekday
+        von, bis = option.start_time, option.end_time
+        if wochentag is None and option.slots:
+            # Aus Einzelterminen den üblichen Wochentag und die Regelzeit ziehen.
+            wochentag = Counter(s.day.weekday() for s in option.slots).most_common(1)[0][0]
+            von = option.typical_start
+            bis = Counter(s.end for s in option.slots).most_common(1)[0][0]
+        if wochentag is None or von is None or bis is None:
+            out.append(option)
+            continue
+
+        herkunft = option.note or "aus einem anderen Semester übernommen"
+        out.append(
+            replace(
+                option,
+                slots=(),
+                weekday=wochentag,
+                start_time=von,
+                end_time=bis,
+                first_date=None,
+                last_date=None,
+                rhythm=RHYTHM_WEEKLY,
+                provisional=True,
+                note=f"Zeitslot übernommen ({herkunft}) — für dieses Semester unbestätigt",
+            )
+        )
+    return out
+
+
 def out_of_semester(
     options: list[CourseOption], semester: Semester
 ) -> list[tuple[CourseOption, str]]:
@@ -503,6 +563,7 @@ class Combination:
 
     options: list[CourseOption]
     days: int
+    campus_days: int          # Tage, an denen man tatsächlich vor Ort sein muss
     gap_minutes: int          # Leerlauf zwischen Terminen, Schnitt pro Woche
 
     @property
@@ -540,12 +601,15 @@ class Combination:
         return tuple(sorted(slots))
 
 
-def _day_shape(options: list[CourseOption], semester: Semester) -> tuple[int, int]:
-    """Anzahl belegter Wochentage und Leerlauf zwischen Terminen."""
+def _day_shape(options: list[CourseOption], semester: Semester) -> tuple[int, int, int]:
+    """Belegte Wochentage, davon Präsenztage, und Leerlauf zwischen Terminen."""
     per_day: dict[date, list[tuple[time, time]]] = {}
+    campus: set[int] = set()
     for option in options:
         for event in option.events(semester):
             per_day.setdefault(event.day, []).append((event.start.time(), event.end.time()))
+            if not option.online:
+                campus.add(event.day.weekday())
 
     weekdays = {day.weekday() for day in per_day}
     gaps = 0
@@ -556,7 +620,7 @@ def _day_shape(options: list[CourseOption], semester: Semester) -> tuple[int, in
                 gaps += (start.hour * 60 + start.minute) - (end.hour * 60 + end.minute)
 
     wochen = len({(day.isocalendar()[0], day.isocalendar()[1]) for day in per_day}) or 1
-    return len(weekdays), round(gaps / wochen)
+    return len(weekdays), len(campus), round(gaps / wochen)
 
 
 def combinations(
@@ -603,8 +667,9 @@ def combinations(
         conflicts = find_conflicts(fixed, semester)
         if conflicts:
             return [], 1
-        days, gaps = _day_shape(fixed, semester)
-        return [Combination(options=list(fixed), days=days, gap_minutes=gaps)], 1
+        days, campus, gaps = _day_shape(fixed, semester)
+        return [Combination(options=list(fixed), days=days, campus_days=campus,
+                            gap_minutes=gaps)], 1
 
     keys = sorted(blocks)
     total = 1
@@ -620,14 +685,15 @@ def combinations(
         selection = fixed + list(picks)
         if find_conflicts(selection, semester):
             continue
-        days, gaps = _day_shape(selection, semester)
-        found.append(Combination(options=selection, days=days, gap_minutes=gaps))
+        days, campus, gaps = _day_shape(selection, semester)
+        found.append(Combination(options=selection, days=days, campus_days=campus,
+                                 gap_minutes=gaps))
 
+    # Präsenztage zählen zuerst: online zu Hause ist kein Uni-Besuch.
     if prefer_small:
-        found.sort(key=lambda c: (c.days, c.total_size, c.gap_minutes))
+        found.sort(key=lambda c: (c.campus_days, c.days, c.total_size, c.gap_minutes))
     else:
-        # Kompakte Wochen zuerst: wenige Tage, wenig Leerlauf.
-        found.sort(key=lambda c: (c.days, c.gap_minutes))
+        found.sort(key=lambda c: (c.campus_days, c.days, c.gap_minutes))
     return found, total
 
 

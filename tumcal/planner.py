@@ -28,6 +28,8 @@ def options_to_json(options: list[CourseOption], semester: Semester) -> list[dic
                 "moduleKey": option.module or option.title,
                 "group": option.group,
                 "room": option.room,
+                "provisional": option.provisional,
+                "online": option.online,
                 "lecturer": option.lecturer,
                 "url": option.url,
                 "deadline": option.deadline.isoformat() if option.deadline else "",
@@ -106,6 +108,9 @@ _EXTRA_CSS = r"""
   .group-title:first-child { margin-top: 0; }
   .hint { color: var(--muted); font-size: 11.5px; margin-bottom: 4px; }
   .ev.ghost { opacity: .34; border: 1px dashed rgba(255,255,255,.75); }
+  /* Vorläufig: Zeitslot übernommen, für dieses Semester unbestätigt. */
+  .ev.provisional { border: 2px dashed rgba(255,255,255,.9); }
+  .ev.provisional b::after { content: " ?"; opacity: .8; }
   .ev.conflict { outline: 2px solid var(--c-exam); outline-offset: -2px; }
   .stat { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
   .stat b { font-size: 18px; display: block; }
@@ -305,9 +310,11 @@ function renderCalendar() {
       const w = 100 / v._cols;
       const bad = conflictKeys.has(v.o.key + v.s.date + v.s.start);
       out += '<div class="ev' + (v.ghost ? " ghost" : "") + (bad ? " conflict" : "") +
+        (v.o.provisional ? " provisional" : "") +
         '" style="top:' + top + "px;height:" + h + "px;left:calc(" + (v._col * w) +
         "% + 3px);width:calc(" + w + '% - 6px);background:var(' + v.o.color + ')" title="' +
-        (v.o.label + " " + v.s.start + "–" + v.s.end + (v.o.room ? " " + v.o.room : ""))
+        (v.o.label + " " + v.s.start + "–" + v.s.end + (v.o.room ? " " + v.o.room : "") +
+         (v.o.provisional ? " — vorläufig, Zeitslot aus einem anderen Semester" : ""))
           .replace(/"/g, "&quot;") + '"><b>' + v.o.title + "</b><span>" +
         v.s.start + "–" + v.s.end + "</span>" + (v.o.group ? "<span>" + v.o.group + "</span>" : "") +
         "</div>";

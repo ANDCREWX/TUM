@@ -12,6 +12,7 @@ from pathlib import Path
 from .catalog import (
     CatalogError,
     out_of_semester,
+    project_to_semester,
     CourseOption,
     NoOptionLeft,
     combinations,
@@ -134,18 +135,25 @@ def _load_catalogs(pfade) -> list[CourseOption]:
     return options
 
 
-def _semesterpruefung(options, semester) -> None:
-    """Laut warnen, wenn Einträge aus einem anderen Semester stammen."""
+def _semesterpruefung(options, semester, project: bool = False):
+    """Einträge aus einem anderen Semester melden, auf Wunsch übernehmen."""
     fremd = out_of_semester(options, semester)
     if not fremd:
-        return
+        return options
     wort = "Eintrag liegt" if len(fremd) == 1 else "Einträge liegen"
     print(f"ACHTUNG: {len(fremd)} {wort} außerhalb der Vorlesungszeit "
           f"({semester.label}):")
     for option, zeitraum in fremd:
         hinweis = f" — {option.note}" if option.note else ""
         print(f"  {option.label}: {zeitraum}{hinweis}")
-    print("  Sie erscheinen in keinem Termin dieses Semesters.\n")
+    if not project:
+        print("  Sie erscheinen in keinem Termin dieses Semesters. "
+              "Mit --project als vorläufigen Zeitslot übernehmen.\n")
+        return options
+
+    print("  → als vorläufiger Zeitslot in dieses Semester übernommen "
+          "(Wochentag und Uhrzeit, gestrichelt dargestellt).\n")
+    return project_to_semester(options, semester)
 
 
 def _mit_modulen(options: list[CourseOption], pfad: str | None) -> list[CourseOption]:
@@ -199,7 +207,7 @@ def cmd_modules(args) -> int:
 def cmd_plan(args) -> int:
     options = _mit_modulen(_load_catalogs(args.catalog), args.modules)
     semester = get_semester(args.semester)
-    _semesterpruefung(options, semester)
+    options = _semesterpruefung(options, semester, args.project)
     vorauswahl = [o.key for o in _read_selection(args.select, options)] if args.select else []
     out = Path(args.out)
     out.write_text(
@@ -296,7 +304,7 @@ def cmd_combos(args) -> int:
     """Konfliktfreie Kombinationen aus allen Gruppenalternativen."""
     options = _mit_modulen(_load_catalogs(args.catalog), args.modules)
     semester = get_semester(args.semester)
-    _semesterpruefung(options, semester)
+    options = _semesterpruefung(options, semester, args.project)
     not_before = _parse_uhrzeit(args.not_before)
 
     if not_before:
@@ -345,9 +353,9 @@ def cmd_combos(args) -> int:
     # Dieselbe Rangfolge wie die Suche - sonst wirft die Anzeige die
     # Größensortierung wieder weg.
     if args.prefer_small:
-        schluessel = lambda g: (g[0].days, g[0].total_size, g[0].gap_minutes)
+        schluessel = lambda g: (g[0].campus_days, g[0].days, g[0].total_size, g[0].gap_minutes)
     else:
-        schluessel = lambda g: (g[0].days, g[0].gap_minutes)
+        schluessel = lambda g: (g[0].campus_days, g[0].days, g[0].gap_minutes)
     formen = sorted(nach_form.values(), key=schluessel)
     print(f"{len(formen)} davon zeitlich verschieden (der Rest unterscheidet sich nur im Raum).\n")
 
@@ -358,8 +366,10 @@ def cmd_combos(args) -> int:
         punkte = ects_total(combo.options)
         groesse = (f", {combo.total_size} Personen gesamt" if combo.total_size else "")
         groesse += f", {punkte:g} ECTS" if punkte else ""
-        print(f"[{index}] {combo.days} Tage/Woche, {leerlauf} Leerlauf pro Woche"
-              f"{groesse}{varianten}")
+        praesenz = (f"{combo.campus_days} Präsenztage"
+                    + (f" (+{combo.days - combo.campus_days} online)"
+                       if combo.days > combo.campus_days else ""))
+        print(f"[{index}] {praesenz}, {leerlauf} Leerlauf pro Woche{groesse}{varianten}")
         if not_before:
             for option, slot in combo.exceptions(not_before)[:2]:
                 print(f"      Ausnahme: {option.label[:40]} am "
@@ -539,6 +549,8 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--title", default="LV-Planung")
     plan.add_argument("--select", help="auswahl.json: diese Einträge vorauswählen")
     plan.add_argument("--modules", help="Modulbeschreibungen: ECTS ergänzen, Lücken melden")
+    plan.add_argument("--project", action="store_true",
+                      help="Termine aus anderen Semestern als vorläufigen Zeitslot übernehmen")
     plan.add_argument("--open", action="store_true", help="Danach im Browser öffnen")
     plan.set_defaults(func=cmd_plan)
 
@@ -569,6 +581,8 @@ def build_parser() -> argparse.ArgumentParser:
     combos.add_argument("--top", type=int, default=5, help="Wie viele anzeigen (Standard: 5)")
     combos.add_argument("--limit", type=int, default=20000, help="Obergrenze geprüfter Kombinationen")
     combos.add_argument("--modules", help="Modulbeschreibungen: ECTS ergänzen, Lücken melden")
+    combos.add_argument("--project", action="store_true",
+                        help="Termine aus anderen Semestern als vorläufigen Zeitslot übernehmen")
     combos.add_argument("--not-before", help="Keine wählbare Gruppe vor dieser Uhrzeit (HH:MM)")
     combos.add_argument("--prefer-small", action="store_true",
                         help="Kleine Gruppen vor geringem Leerlauf einsortieren")

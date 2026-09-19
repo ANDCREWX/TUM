@@ -137,6 +137,8 @@ def parse_lv_page(text: str) -> list[CourseOption]:
     if modul_treffer:
         modul = modul_treffer.group(1)
 
+    # "Online: Videokonferenz" steht als eigene Zeile unter der Serie.
+    ort = next((z for z in zeilen if z.lower().startswith("online")), "")
     hinweise = [h for h in (angeboten, sprache) if h]
     out: list[CourseOption] = []
     for zeile in zeilen:
@@ -154,6 +156,7 @@ def parse_lv_page(text: str) -> list[CourseOption]:
                 end_time=_parse_time(serie.group("bis")),
                 first_date=datetime.strptime(serie.group("start"), "%d.%m.%Y").date(),
                 last_date=datetime.strptime(serie.group("ende"), "%d.%m.%Y").date(),
+                room=ort,
                 note=" · ".join(hinweise),
             )
         )

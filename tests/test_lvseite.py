@@ -85,3 +85,77 @@ def test_option_without_dates_is_not_flagged():
 
     offen = CourseOption(title="Logik", kind="VO")
     assert out_of_semester([offen], WS2627) == []
+
+
+# --- Übernahme in ein anderes Semester --------------------------------------
+
+def test_projection_keeps_only_weekday_and_time():
+    from tumcal.catalog import project_to_semester
+
+    projiziert = project_to_semester(OPTIONS, WS2627)[0]
+    assert projiziert.provisional is True
+    assert projiziert.weekday == 0
+    assert projiziert.start_time == time(10)
+    assert projiziert.first_date is None and projiziert.last_date is None
+    assert len(projiziert.occurrences(WS2627)) == len(WS2627.lecture_days(0))
+    assert "unbestätigt" in projiziert.note
+
+
+def test_projected_entry_is_labelled_provisional():
+    from tumcal.catalog import project_to_semester
+
+    assert project_to_semester(OPTIONS, WS2627)[0].label.endswith("[vorläufig]")
+
+
+def test_projection_leaves_matching_entries_alone():
+    from tumcal.catalog import CourseOption, Slot, project_to_semester
+
+    drin = CourseOption(title="Passt", kind="VO",
+                        slots=(Slot(day=date(2026, 10, 19), start=time(10), end=time(12)),))
+    assert project_to_semester([drin], WS2627)[0] is drin
+
+
+# --- Online statt Präsenz ---------------------------------------------------
+
+def test_online_format_is_detected():
+    assert OPTIONS[0].online is True
+    assert "Online" in OPTIONS[0].room
+
+
+def test_room_number_is_not_online():
+    from tumcal.catalog import CourseOption
+
+    praesenz = CourseOption(title="Vorlesung", kind="VO", room="5602.EG.001 (MI HS 1)")
+    assert praesenz.online is False
+    assert CourseOption(title="Ohne Raum", kind="VO").online is False
+
+
+def test_campus_days_exclude_online_only_days():
+    """Ein reiner Online-Tag ist kein Uni-Besuch."""
+    from tumcal.catalog import CourseOption, Slot, combinations
+
+    online_montag = CourseOption(
+        title="Logik", kind="VO", room="Online: Videokonferenz",
+        slots=(Slot(day=date(2026, 10, 19), start=time(10), end=time(12)),))
+    praesenz_dienstag = CourseOption(
+        title="Vorlesung", kind="VO", room="MI HS 1",
+        slots=(Slot(day=date(2026, 10, 20), start=time(10), end=time(12)),))
+    found, _ = combinations([online_montag, praesenz_dienstag], WS2627)
+    assert found[0].days == 2
+    assert found[0].campus_days == 1
+
+
+def test_campus_days_rank_before_total_days():
+    from tumcal.catalog import CourseOption, Slot, combinations
+
+    anker = CourseOption(title="Anker", kind="VO", room="HS 1",
+                         slots=(Slot(day=date(2026, 10, 20), start=time(10), end=time(12)),))
+    online = CourseOption(title="A", kind="UE", module="MA", group="online",
+                          room="Online", slots=(Slot(day=date(2026, 10, 19),
+                                                     start=time(14), end=time(16)),))
+    vorort = CourseOption(title="A", kind="UE", module="MA", group="vorort",
+                          room="Seminarraum", slots=(Slot(day=date(2026, 10, 19),
+                                                          start=time(14), end=time(16)),))
+    found, _ = combinations([anker, online, vorort], WS2627)
+    assert found[0].groups[0].group == "online"
+    assert found[0].campus_days == 1
