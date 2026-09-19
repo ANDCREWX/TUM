@@ -69,9 +69,13 @@ def test_exam_option_carries_no_exclusive_key_for_main_date():
 
 # --- Studienordnung ---------------------------------------------------------
 
-def test_curriculum_loads_all_compulsory_modules():
-    assert len(CURRICULUM) == 22
-    assert sum(m.ects for m in CURRICULUM) == 150.0
+def test_curriculum_separates_compulsory_from_elective():
+    pflicht = [m for m in CURRICULUM if m.compulsory]
+    wahl = [m for m in CURRICULUM if not m.compulsory]
+    assert len(pflicht) == 22
+    assert sum(m.ects for m in pflicht) == 150.0
+    assert wahl, "die Wahlkataloge der Ordnung gehören dazu"
+    assert "WI001056_1" in {m.code for m in wahl}   # Principles of Economics
 
 
 def test_first_semester_has_31_credits():
@@ -100,9 +104,24 @@ def test_check_plan_reports_missing_compulsory_module():
 
 
 def test_check_plan_flags_modules_outside_the_curriculum():
+    """Nicht gelistet heißt nicht 'zählt nicht': die Wahlkataloge sind offen."""
     plan = [CourseOption(title="Economics I", kind="VO", module="WI000021_E")]
     ergebnis = check_plan(plan, CURRICULUM, semester=1)
     assert any("WI000021_E" in eintrag for eintrag in ergebnis.unlisted)
+    assert ergebnis.elective == []
+
+
+def test_listed_elective_is_not_reported_as_unknown():
+    plan = [CourseOption(title="Principles of Economics", kind="VO", module="WI001056_1")]
+    ergebnis = check_plan(plan, CURRICULUM, semester=1)
+    assert ergebnis.unlisted == []
+    assert any("WI001056_1" in eintrag for eintrag in ergebnis.elective)
+
+
+def test_elective_module_is_not_counted_as_missing_compulsory():
+    plan = [CourseOption(title="Wirtschaftsprivatrecht I", kind="VO", module="WI000027")]
+    ergebnis = check_plan(plan, CURRICULUM, semester=1)
+    assert "WI000027" not in {m.code for m in ergebnis.missing}
 
 
 def test_module_code_suffix_is_ignored_when_matching():

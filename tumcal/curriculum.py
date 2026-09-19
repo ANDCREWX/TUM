@@ -24,6 +24,7 @@ class CurriculumModule:
     duration: str = ""
     language: str = ""
     foundation: bool = False
+    compulsory: bool = True
 
 
 @dataclass
@@ -33,7 +34,8 @@ class PlanCheck:
     semester: int
     planned: list[CurriculumModule]
     missing: list[CurriculumModule]
-    unlisted: list[str]              # im Plan, aber nicht in der Ordnung
+    elective: list[str]              # im Plan, als Wahlmodul der Ordnung gelistet
+    unlisted: list[str]              # im Plan, in der Ordnung gar nicht genannt
     foundation_planned: float        # Credits aus Grundlagenprüfungen im Plan
     foundation_total: float          # insgesamt verfügbare Grundlagen-Credits
 
@@ -67,6 +69,7 @@ def load_curriculum(path: str | Path | None = None) -> list[CurriculumModule]:
                 language=(row.get("Sprache") or "").strip(),
                 foundation=(row.get("Grundlagenpruefung") or "").strip().lower()
                 in ("ja", "yes", "true", "1"),
+                compulsory=(row.get("Typ") or "Pflicht").strip().lower() != "wahl",
             )
         )
     return module
@@ -94,17 +97,21 @@ def check_plan(
 
     geplant = [m for m in des_semesters if any(_gleich(m.code, c) for c in im_plan)]
     fehlend = [m for m in des_semesters if m not in geplant]
-    unbekannt = [
-        f"{code} ({titel})"
-        for code, titel in im_plan.items()
-        if not any(_gleich(m.code, code) for m in curriculum)
-    ]
+
+    wahl, unbekannt = [], []
+    for code, titel in im_plan.items():
+        treffer = next((m for m in curriculum if _gleich(m.code, code)), None)
+        if treffer is None:
+            unbekannt.append(f"{code} ({titel})")
+        elif not treffer.compulsory:
+            wahl.append(f"{code} ({treffer.name})")
 
     grundlagen = [m for m in curriculum if m.foundation]
     return PlanCheck(
         semester=semester,
         planned=geplant,
         missing=fehlend,
+        elective=sorted(wahl),
         unlisted=sorted(unbekannt),
         foundation_planned=sum(
             m.ects for m in grundlagen if any(_gleich(m.code, c) for c in im_plan)

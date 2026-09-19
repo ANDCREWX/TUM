@@ -393,17 +393,25 @@ def cmd_curriculum(args) -> int:
         for modul in ergebnis.missing:
             mark = " [Grundlagenprüfung]" if modul.foundation else ""
             print(f"  ✗ {modul.code:<12} {modul.name[:44]:<44} {modul.ects:>4.0f} CR{mark}")
+    if ergebnis.elective:
+        print("\nIm Plan als Wahlmodul der Ordnung:")
+        for eintrag in ergebnis.elective:
+            print(f"  ○ {eintrag}")
     if ergebnis.unlisted:
-        print("\nIm Plan, aber nicht in der Studienordnung (Pflichtbereich):")
+        print("\nIm Plan, in dieser Modulliste nicht genannt:")
         for eintrag in ergebnis.unlisted:
             print(f"  ? {eintrag}")
+        print("  Die Wahlkataloge werden laut FPSO fortlaufend vom Prüfungsausschuss")
+        print("  aktualisiert und stehen nicht abschließend in der Satzung. Ein hier")
+        print("  fehlendes Modul kann als Wahlmodul anerkannt sein — verbindlich ist")
+        print("  der Studienplan in TUMonline, nicht diese Liste.")
 
     print(f"\nGrundlagenprüfungen (§ 38 Abs. 2): {ergebnis.foundation_planned:g} von "
           f"{ergebnis.foundation_total:g} Credits im Plan.")
     print("  Mindestens 12 Credits davon bis Ende des 2. Fachsemesters.")
     if ergebnis.foundation_planned < 12:
         print("  ACHTUNG: der Plan deckt die Hürde nicht ab.")
-    return 1 if ergebnis.missing or ergebnis.unlisted else 0
+    return 1 if ergebnis.missing else 0
 
 
 def cmd_exams(args) -> int:

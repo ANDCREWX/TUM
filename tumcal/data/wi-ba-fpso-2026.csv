@@ -1,26 +1,39 @@
 # Pflichtmodule B.Sc. Wirtschaftsinformatik TUM, Anlage 1 der FPSO vom 10.08.2023
 # in der Fassung der Zweiten Änderungssatzung vom 12.02.2026.
 # Grundlagenpruefung=ja: zaehlt fuer die 12-Credits-Huerde nach § 38 Abs. 2.
-Nummer;Modulbezeichnung;Bereich;Semester;SWS;Credits;Pruefungsart;Dauer;Sprache;Grundlagenpruefung
-CIT123001;Einführung in die Informatik und das Programmieren;Informatik;1;4+4;12;zwei Übungsleistungen + Klausur;180-240;DE/EN;ja
-IN0021;Einführung in die Wirtschaftsinformatik;Wirtschaftsinformatik;1;2+2;5;Klausur;75-125;DE/EN;ja
-IN0015;Diskrete Strukturen;Mathematik;1;4+2;8;Klausur;120-180;DE/EN;ja
-WI001059_E;Financial Accounting;Wirtschaftswissenschaften;1;2+2;6;Klausur;60-120;EN;nein
-IN0006;Einführung in die Softwaretechnik;Informatik;2;3+2;6;Klausur;90-150;DE/EN;nein
-IN0007;Grundlagen: Algorithmen und Datenstrukturen;Informatik;2;3+2;6;Klausur;90-150;DE/EN;nein
-IN0025;Information Technologies and Society;Wirtschaftsinformatik;2;2+2;5;Klausur;75-125;EN;nein
-WI001057_E;Cost Accounting;Wirtschaftswissenschaften;2;2+2;6;Klausur;60;EN;nein
-MA0901;Lineare Algebra für Informatik;Mathematik;2;4+2;8;Klausur;90-180;DE;nein
-IN0008;Grundlagen: Datenbanken;Informatik;3;3+2;6;Klausur;90-150;DE/EN;nein
-IN2085;Software Engineering für betriebliche Anwendungen Bachelorkurs;Wirtschaftsinformatik;3;2+2;5;Klausur;75-125;DE/EN;nein
-WI000219_E;Investment and Financial Management;Wirtschaftswissenschaften;3;4;6;Übungsleistung;;EN;nein
-MA0902;Analysis für Informatik;Mathematik;3;4+2;8;Klausur;90-180;DE;nein
-IN0010;Grundlagen: Rechnernetze und Verteilte Systeme;Informatik;4;3+2;6;Klausur;90-150;DE/EN;nein
-IN0014;Seminar;Informatik;4;2;5;wiss. Ausarbeitung;;DE/EN;nein
-IN0024;Operations Research;Wirtschaftsinformatik;4;3+2;6;Klausur;90-150;DE/EN;nein
-MGT001373;Applied Econometrics;Wirtschaftswissenschaften;4;2+2;6;Klausur;90;DE/EN;nein
-IN0012;Bachelor-Praktikum;Informatik;5;6;10;Projektarbeit;;DE/EN;nein
-IN2028;Business Analytics and Machine Learning;Wirtschaftsinformatik;5;2+2;5;Klausur;75-125;EN;nein
-IN2317;Bachelorprojekt;Abschluss;6;;10;Projektarbeit;;DE/EN;nein
-IN2316;Bachelor's Thesis;Abschluss;6;;12;Abschlussarbeit;;DE/EN;nein
-IN2285;Bachelorkolloquium;Abschluss;6;1;3;Präsentation;;DE/EN;nein
+# Typ=Wahl: die Wahlkataloge werden laut FPSO fortlaufend vom Pruefungsausschuss
+# aktualisiert und stehen NICHT abschliessend in der Satzung. Ein hier fehlendes
+# Modul kann trotzdem anerkannt sein - verbindlich ist der Studienplan in TUMonline.
+Nummer;Modulbezeichnung;Bereich;Semester;SWS;Credits;Pruefungsart;Dauer;Sprache;Grundlagenpruefung;Typ
+CIT123001;Einführung in die Informatik und das Programmieren;Informatik;1;4+4;12;zwei Übungsleistungen + Klausur;180-240;DE/EN;ja;Pflicht
+IN0021;Einführung in die Wirtschaftsinformatik;Wirtschaftsinformatik;1;2+2;5;Klausur;75-125;DE/EN;ja;Pflicht
+IN0015;Diskrete Strukturen;Mathematik;1;4+2;8;Klausur;120-180;DE/EN;ja;Pflicht
+WI001059_E;Financial Accounting;Wirtschaftswissenschaften;1;2+2;6;Klausur;60-120;EN;nein;Pflicht
+IN0006;Einführung in die Softwaretechnik;Informatik;2;3+2;6;Klausur;90-150;DE/EN;nein;Pflicht
+IN0007;Grundlagen: Algorithmen und Datenstrukturen;Informatik;2;3+2;6;Klausur;90-150;DE/EN;nein;Pflicht
+IN0025;Information Technologies and Society;Wirtschaftsinformatik;2;2+2;5;Klausur;75-125;EN;nein;Pflicht
+WI001057_E;Cost Accounting;Wirtschaftswissenschaften;2;2+2;6;Klausur;60;EN;nein;Pflicht
+MA0901;Lineare Algebra für Informatik;Mathematik;2;4+2;8;Klausur;90-180;DE;nein;Pflicht
+IN0008;Grundlagen: Datenbanken;Informatik;3;3+2;6;Klausur;90-150;DE/EN;nein;Pflicht
+IN2085;Software Engineering für betriebliche Anwendungen Bachelorkurs;Wirtschaftsinformatik;3;2+2;5;Klausur;75-125;DE/EN;nein;Pflicht
+WI000219_E;Investment and Financial Management;Wirtschaftswissenschaften;3;4;6;Übungsleistung;;EN;nein;Pflicht
+MA0902;Analysis für Informatik;Mathematik;3;4+2;8;Klausur;90-180;DE;nein;Pflicht
+IN0010;Grundlagen: Rechnernetze und Verteilte Systeme;Informatik;4;3+2;6;Klausur;90-150;DE/EN;nein;Pflicht
+IN0014;Seminar;Informatik;4;2;5;wiss. Ausarbeitung;;DE/EN;nein;Pflicht
+IN0024;Operations Research;Wirtschaftsinformatik;4;3+2;6;Klausur;90-150;DE/EN;nein;Pflicht
+MGT001373;Applied Econometrics;Wirtschaftswissenschaften;4;2+2;6;Klausur;90;DE/EN;nein;Pflicht
+IN0012;Bachelor-Praktikum;Informatik;5;6;10;Projektarbeit;;DE/EN;nein;Pflicht
+IN2028;Business Analytics and Machine Learning;Wirtschaftsinformatik;5;2+2;5;Klausur;75-125;EN;nein;Pflicht
+IN2317;Bachelorprojekt;Abschluss;6;;10;Projektarbeit;;DE/EN;nein;Pflicht
+IN2316;Bachelor's Thesis;Abschluss;6;;12;Abschlussarbeit;;DE/EN;nein;Pflicht
+IN2285;Bachelorkolloquium;Abschluss;6;1;3;Präsentation;;DE/EN;nein;Pflicht
+WI000969;Entrepreneurship for Students of Information Systems;Wirtschaftswissenschaften/Betriebswirtschaftslehre;0;2;3;Klausur;60;EN;nein;Wahl
+WI000285;Innovative Entrepreneurs - Leadership of High-Tech Companies;Wirtschaftswissenschaften/Betriebswirtschaftslehre;0;2;3;Projektarbeit;;EN;nein;Wahl
+WI000027;Wirtschaftsprivatrecht I;Wirtschaftswissenschaften/Recht;0;2+2;6;Klausur;120;DE;nein;Wahl
+WI000030;Wirtschaftsprivatrecht II;Wirtschaftswissenschaften/Recht;0;2+2;6;Klausur;120;DE;nein;Wahl
+POL70041;Grundlagen der Soziologie;Wirtschaftswissenschaften/Soziologie;0;2;3;Klausur;60;DE;nein;Wahl
+POL70029;Grundkurs Soziologie III (Sozialstruktur);Wirtschaftswissenschaften/Soziologie;0;2;3;Klausur;60;DE;nein;Wahl
+WI001056_1;Principles of Economics;Überfachliche Grundlagen;0;2+2;6;Klausur;120;EN;nein;Wahl
+IN9017;Existenzgründung;Überfachliche Grundlagen;0;2;4;wiss. Ausarbeitung;;DE;nein;Wahl
+IN9006;Entrepreneurship for Small Software-oriented Enterprises;Überfachliche Grundlagen;0;1;2;Präsentation;15-20;EN;nein;Wahl
+IN9010;Seminar Wissenschaft und Ethik;Überfachliche Grundlagen;0;2;4;wiss. Ausarbeitung;;DE/EN;nein;Wahl

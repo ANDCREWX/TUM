@@ -165,8 +165,15 @@ welche Module überhaupt vorgeschrieben sind — und ob der eigene Plan dazu pas
 python3 -m tumcal curriculum --catalog paste.txt --semester 1
 ```
 
-Gemeldet werden Pflichtmodule des Fachsemesters, die im Plan fehlen, und
-Module im Plan, die im Pflichtbereich der Ordnung nicht vorkommen. Zusätzlich
+Gemeldet werden Pflichtmodule des Fachsemesters, die im Plan fehlen, sowie
+Planeinträge, die die Ordnung als Wahlmodul führt oder gar nicht nennt.
+
+Wichtig zur Einordnung: Die **Wahlkataloge stehen nicht abschließend in der
+Satzung** — laut FPSO aktualisiert sie der Prüfungsausschuss fortlaufend und
+gibt Änderungen zu Semesterbeginn auf der Studiengangsseite bekannt. Ein Modul,
+das hier fehlt, kann also trotzdem anerkannt sein. Verbindlich ist der
+Studienplan in TUMonline, nicht diese Liste. Für den **Pflichtbereich** gilt
+das nicht: der ist in Anlage 1 abschließend geregelt. Zusätzlich
 werden die Credits aus Grundlagenprüfungen ausgewiesen — bei TUM WI müssen
 davon mindestens 12 bis zum Ende des zweiten Fachsemesters bestanden sein
 (§ 38 Abs. 2 FPSO).
@@ -252,6 +259,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-106 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+108 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).
