@@ -255,6 +255,21 @@ python3 -m tumcal conflicts --catalog lv-angebot.csv --select auswahl.json
 python3 -m tumcal anmelden  --catalog lv-angebot.csv --select auswahl.json --open
 ```
 
+### Präferenzen statt Einzelwahl
+
+TUMonline meldet dich seit WS 20/21 **am Anmeldeverfahren** an, nicht an einer
+einzelnen Gruppe. Du kannst mehrere Gruppen einer Lehrveranstaltung anmelden
+und je Gruppe eine Präferenz von niedrig bis hoch setzen; verteilt wird nach
+Fristende per Losverfahren, wobei zuerst das Regelwerk des Verfahrens greift
+und erst danach die Präferenzen ausgewertet werden. Der Anmeldezeitpunkt
+spielt keine Rolle.
+
+Der Planer bildet das ab: Mehrere Gruppen derselben LV anzuhaken ist der
+Normalfall, **die Reihenfolge der Auswahl ist die Präferenz** (1 = hoch). Auf
+Terminkonflikte werden nur die Erstpräferenzen geprüft — Alternativen derselben
+LV schließen einander aus und können sich deshalb nicht überschneiden. Die
+Anmelde-Checkliste gibt die Präferenzreihenfolge je Lehrveranstaltung aus.
+
 ### Zur Anmeldung selbst
 
 `anmelden` **führt die Anmeldung nicht durch**. Es listet deine Auswahl mit
@@ -286,6 +301,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-127 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+129 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).

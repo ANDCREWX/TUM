@@ -113,9 +113,11 @@ def _read_selection(path: str | None, options: list[CourseOption]) -> list[Cours
     if not path:
         return options
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    keys = set(data.get("keys") or data if isinstance(data, list) else data.get("keys", []))
-    chosen = [o for o in options if o.key in keys]
-    unknown = keys - {o.key for o in options}
+    roh = data if isinstance(data, list) else data.get("keys", [])
+    # Die Reihenfolge ist die Präferenz - sie darf nicht verloren gehen.
+    nach_key = {o.key: o for o in options}
+    chosen = [nach_key[k] for k in roh if k in nach_key]
+    unknown = {k for k in roh if k not in nach_key}
     if unknown:
         print(
             f"Warnung: {len(unknown)} Einträge aus der Auswahl fehlen im Katalog "
@@ -397,19 +399,38 @@ def cmd_anmelden(args) -> int:
     with_url = [o for o in options if o.url]
     print(f"{len(options)} Veranstaltungen ausgewählt, {len(with_url)} mit Anmeldelink.\n")
     print("Die Anmeldung selbst bestätigst du in TUMonline - dieses Skript klickt nichts an.")
-    print("Seit WS 20/21 gilt kein 'First come, first served': die Reihenfolge ist egal.\n")
+    print("Angemeldet wird am Verfahren, nicht an der einzelnen Gruppe: mehrere")
+    print("Gruppen anmelden und je Gruppe die Präferenz setzen (hoch = Wunsch).")
+    print("Der Zeitpunkt ist egal, verteilt wird per Losverfahren nach Fristende.\n")
 
-    for index, option in enumerate(options, 1):
-        frist = f" · Frist {option.deadline:%d.%m.%Y}" if option.deadline else ""
-        print(f"[{index}/{len(options)}] {option.label}{frist}")
-        if not option.url:
+    # Gruppen derselben LV sind Alternativen: sie werden gemeinsam angemeldet,
+    # die Reihenfolge der Auswahl ist die Präferenz.
+    bloecke: dict[str, list] = {}
+    reihenfolge: list[str] = []
+    for option in options:
+        schluessel = option.exclusive_key or option.key
+        if schluessel not in bloecke:
+            bloecke[schluessel] = []
+            reihenfolge.append(schluessel)
+        bloecke[schluessel].append(option)
+
+    for index, schluessel in enumerate(reihenfolge, 1):
+        gruppe = bloecke[schluessel]
+        kopf = gruppe[0]
+        frist = f" · Frist {kopf.deadline:%d.%m.%Y}" if kopf.deadline else ""
+        print(f"[{index}/{len(reihenfolge)}] {kopf.title} ({kopf.kind_label}){frist}")
+        if len(gruppe) > 1 or kopf.group:
+            for rang, option in enumerate(gruppe, 1):
+                print(f"      Präferenz {rang}: {option.group or '–'}"
+                      f"  {_woche(option, get_semester('ws2627'))}")
+        if not kopf.url:
             print("      kein Link hinterlegt - in TUMonline suchen nach: "
-                  f"{option.lv_id or option.title}")
+                  f"{kopf.lv_id or kopf.title}")
             continue
-        print(f"      {option.url}")
+        print(f"      {kopf.url}")
         if args.open:
             input("      [Enter] öffnet die Seite, [Strg+C] bricht ab ")
-            webbrowser.open(option.url)
+            webbrowser.open(kopf.url)
     if not args.open:
         print("\nMit --open werden die Seiten nacheinander im Browser geöffnet.")
     return 0

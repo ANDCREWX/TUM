@@ -216,3 +216,27 @@ def test_size_prefers_reported_count_over_capacity():
     assert gemeldet.size == 33
     assert nur_kontingent.size == 20
     assert CourseOption(title="C", kind="UE").size is None
+
+
+# --- Präferenzen statt Einzelwahl -------------------------------------------
+
+def test_selection_order_is_preserved_as_preference(tmp_path):
+    """TUMonline verteilt per Los: die Reihenfolge der Auswahl ist die Präferenz."""
+    import json
+
+    from tumcal.cli import _read_selection
+
+    optionen = [o for o in OPTIONS if o.title == "Economics I"]
+    assert len(optionen) == 2
+    umgekehrt = [optionen[1].key, optionen[0].key]
+    pfad = tmp_path / "auswahl.json"
+    pfad.write_text(json.dumps({"keys": umgekehrt}), encoding="utf-8")
+
+    gewaehlt = _read_selection(str(pfad), OPTIONS)
+    assert [o.key for o in gewaehlt] == umgekehrt
+
+
+def test_several_groups_of_one_course_share_a_block():
+    """Sie sind Alternativen im selben Verfahren, keine konkurrierenden Termine."""
+    economics = [o for o in OPTIONS if o.title == "Economics I"]
+    assert len({o.exclusive_key for o in economics}) == 1

@@ -107,6 +107,8 @@ _EXTRA_CSS = r"""
   .group-title { font-weight: 600; font-size: 13px; margin: 14px 0 2px; }
   .group-title:first-child { margin-top: 0; }
   .hint { color: var(--muted); font-size: 11.5px; margin-bottom: 4px; }
+  .rank { font-size: 11px; color: var(--muted); border: 1px solid var(--border);
+          border-radius: 999px; padding: 0 6px; }
   .ev.ghost { opacity: .34; border: 1px dashed rgba(255,255,255,.75); }
   /* Vorläufig: Zeitslot übernommen, für dieses Semester unbestätigt. */
   .ev.provisional { border: 2px dashed rgba(255,255,255,.9); }
@@ -160,8 +162,9 @@ _PLANNER = r"""<!DOCTYPE html>
 
       <div class="panel" style="margin-top:18px">
         <h2>Anmelde-Checkliste</h2>
-        <div class="hint">In TUMonline anmelden – Reihenfolge egal, seit 20W kein
-          „First come, first served“.</div>
+        <div class="hint">In TUMonline zum Verfahren anmelden und je Gruppe die
+          Präferenz setzen (hoch = Wunschgruppe). Der Anmeldezeitpunkt ist egal —
+          verteilt wird per Losverfahren nach Fristende.</div>
         <ol class="checklist" id="checklist"></ol>
       </div>
     </div>
@@ -214,10 +217,25 @@ if (allWeeks.length && !allWeeks.includes(isoOf(current))) {
 }
 
 const chosen = () => DATA.options.filter((o) => selected.has(o.key));
+const byKey = {};
+DATA.options.forEach((o) => { byKey[o.key] = o; });
+
+// TUMonline verteilt nach Verfahren: mehrere Gruppen einer LV anmelden ist
+// erwünscht, die Präferenz steuert nur das Losverfahren. Die Reihenfolge der
+// Auswahl ist die Präferenz.
+function prefRank(o) {
+  if (!o.exclusive) return 0;
+  const gleicherBlock = [...selected].filter(
+    (k) => byKey[k] && byKey[k].exclusive === o.exclusive);
+  return gleicherBlock.indexOf(o.key);
+}
 
 function conflicts() {
+  // Nur Erstpräferenzen können gleichzeitig zugeteilt werden; Alternativen
+  // derselben LV schließen einander aus und kollidieren daher nicht.
   const slots = [];
-  chosen().forEach((o) => o.slots.forEach((s) => slots.push({ o, s })));
+  chosen().filter((o) => prefRank(o) <= 0)
+    .forEach((o) => o.slots.forEach((s) => slots.push({ o, s })));
   slots.sort((a, b) => a.s.date.localeCompare(b.s.date) || a.s.startMin - b.s.startMin);
   const out = [];
   for (let i = 0; i < slots.length; i++) {
@@ -237,16 +255,19 @@ function renderOptions() {
   document.getElementById("options").innerHTML = Object.entries(groups).map(([titel, opts]) => {
     const mehrfach = opts.filter((o) => o.exclusive).length > 1;
     return "<div class='group-title'>" + titel + "</div>" +
-      (mehrfach ? "<div class='hint'>Mehrere Gruppen – in der Regel nur eine wählen.</div>" : "") +
+      (mehrfach ? "<div class='hint'>Mehrere Gruppen – ruhig mehrere anhaken. " +
+        "Die Reihenfolge deiner Auswahl ist die Präferenz (1 = hoch).</div>" : "") +
       opts.map((o) => {
         const zeiten = o.slots.length
           ? DATA.weekdays[new Date(o.slots[0].date + "T00:00:00").getDay() === 0 ? 6
               : new Date(o.slots[0].date + "T00:00:00").getDay() - 1].slice(0, 2) +
             " " + o.slots[0].start + "–" + o.slots[0].end + " · " + o.slots.length + " Termine"
           : "keine Termine hinterlegt";
+        const rang = selected.has(o.key) && o.exclusive ? prefRank(o) + 1 : 0;
         return "<label class='opt'><input type='checkbox' data-key='" + o.key + "'" +
           (selected.has(o.key) ? " checked" : "") + "><span><span class='tag' style='background:var(" +
           o.color + ")'>" + o.kindLabel + "</span> " + (o.group || "") +
+          (rang ? " <span class='rank'>Präferenz " + rang + "</span>" : "") +
           "<div class='meta'>" + zeiten + (o.room ? " · " + o.room : "") +
           (o.ects ? " · " + o.ects + " ECTS" : "") + "</div></span></label>";
       }).join("");
@@ -346,12 +367,6 @@ function renderSummary() {
     Object.values(proModul).reduce((a, b) => a + b, 0).toString().replace(".", ",");
   document.getElementById("nConf").textContent = uniqueConf.length;
 
-  const doppelt = {};
-  sel.filter((o) => o.exclusive).forEach((o) => {
-    doppelt[o.exclusive] = (doppelt[o.exclusive] || 0) + 1;
-  });
-  const mehrfachGruppen = Object.entries(doppelt).filter(([, n]) => n > 1);
-
   let warn = "";
   if (uniqueConf.length) {
     warn += "<div class='warn'><b>Terminkonflikte</b><ul>" + uniqueConf.slice(0, 6).map((c) =>
@@ -360,18 +375,29 @@ function renderSummary() {
       (uniqueConf.length > 6 ? "<div>… und " + (uniqueConf.length - 6) + " weitere</div>" : "") +
       "</div>";
   }
-  if (mehrfachGruppen.length) {
-    warn += "<div class='warn'><b>Mehrere Gruppen derselben Übung gewählt</b><ul>" +
-      mehrfachGruppen.map(([k, n]) => "<li>" + k.split("|")[0] + ": " + n + " Gruppen</li>").join("") +
-      "</ul></div>";
-  }
   document.getElementById("warnings").innerHTML = warn;
 
-  document.getElementById("checklist").innerHTML = sel.length
-    ? sel.map((o) => "<li>" + (o.url ? "<a href='" + o.url + "' target='_blank' rel='noopener'>" +
-        o.label + "</a>" : o.label) + (o.lvId ? " <span class='meta'>· " + o.lvId + "</span>" : "") +
-        (o.deadline ? " <span class='meta'>· Frist " + fmt(o.deadline) + "</span>" : "") + "</li>").join("")
-    : "<li class='meta'>Noch nichts ausgewählt.</li>";
+  const bloecke = {};
+  sel.forEach((o) => {
+    const schluessel = o.exclusive || o.key;
+    (bloecke[schluessel] = bloecke[schluessel] || []).push(o);
+  });
+  const eintraege = Object.values(bloecke).map((gruppe) => {
+    gruppe.sort((a, b) => prefRank(a) - prefRank(b));
+    const kopf = gruppe[0];
+    const name = kopf.url
+      ? "<a href='" + kopf.url + "' target='_blank' rel='noopener'>" + kopf.title + "</a>"
+      : kopf.title;
+    if (gruppe.length === 1 && !kopf.group) {
+      return "<li>" + name + " <span class='meta'>(" + kopf.kindLabel + ")</span>" +
+        (kopf.lvId ? " <span class='meta'>· " + kopf.lvId + "</span>" : "") + "</li>";
+    }
+    return "<li>" + name + " <span class='meta'>(" + kopf.kindLabel + ")</span><div class='meta'>" +
+      gruppe.map((o, i) => "Präferenz " + (i + 1) + ": " + (o.group || "–")).join(" · ") +
+      "</div></li>";
+  });
+  document.getElementById("checklist").innerHTML =
+    eintraege.join("") || "<li class='meta'>Noch nichts ausgewählt.</li>";
 }
 
 function download(name, text, type) {
