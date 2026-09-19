@@ -96,6 +96,7 @@ Bedienelementen („weniger anzeigen", „Präferenz bearbeiten"):
 ```bash
 python3 -m tumcal plan --catalog paste.txt --open          # direkt planen
 python3 -m tumcal plan --catalog paste.txt --select auswahl.json   # mit Vorauswahl
+python3 -m tumcal plan --catalog paste.txt --catalog offen.csv     # mehrere Quellen
 python3 -m tumcal convert --input paste.txt --out lv.json  # oder speichern
 ```
 
@@ -106,6 +107,12 @@ Gruppen heißen dabei mal `Gruppe 1`, mal `Group 2`, mal `01-08xx-03.09.014` —
 alle drei Formen werden erkannt. Die unter „Gleiche LVs:" aufgezählten
 Querverweise auf Parallelschienen werden ignoriert, sie sind keine eigenen
 Veranstaltungen.
+
+`--catalog` ist mehrfach angebbar, etwa um das Angebot mit einer Liste noch
+offener Posten zu verbinden. Einträge **ohne Termine** verschwinden dabei
+nicht: Sie erscheinen im Kalender unter „Noch ohne Termine" und zählen bei
+ECTS und Studienordnungs-Abgleich mit. So bleibt ein Modul sichtbar, dessen
+Termine TUMonline noch nicht veröffentlicht hat.
 
 Einzeltermine haben Vorrang vor jeder Hochrechnung: Ausfalltage, Raumwechsel
 und einmalig verschobene Uhrzeiten bleiben so erhalten.
@@ -259,6 +266,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-108 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+110 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).

@@ -123,6 +123,16 @@ def _read_selection(path: str | None, options: list[CourseOption]) -> list[Cours
     return chosen
 
 
+def _load_catalogs(pfade) -> list[CourseOption]:
+    """Mehrere Katalogdateien zusammenführen (Angebot + offene Posten)."""
+    if isinstance(pfade, (str, Path)):
+        pfade = [pfade]
+    options: list[CourseOption] = []
+    for pfad in pfade:
+        options.extend(load_catalog(pfad))
+    return options
+
+
 def _mit_modulen(options: list[CourseOption], pfad: str | None) -> list[CourseOption]:
     """ECTS aus den Modulbeschreibungen ergänzen und Lücken melden."""
     if not pfad:
@@ -160,7 +170,7 @@ def cmd_modules(args) -> int:
           f"{sum(m.presence_hours for m in module)} Präsenzstunden.")
 
     if args.catalog:
-        fehlend = missing_lectures(load_catalog(args.catalog), module)
+        fehlend = missing_lectures(_load_catalogs(args.catalog), module)
         print()
         if fehlend:
             print("Im Katalog fehlen:")
@@ -172,7 +182,7 @@ def cmd_modules(args) -> int:
 
 
 def cmd_plan(args) -> int:
-    options = _mit_modulen(load_catalog(args.catalog), args.modules)
+    options = _mit_modulen(_load_catalogs(args.catalog), args.modules)
     semester = get_semester(args.semester)
     vorauswahl = [o.key for o in _read_selection(args.select, options)] if args.select else []
     out = Path(args.out)
@@ -181,9 +191,13 @@ def cmd_plan(args) -> int:
     )
 
     without_times = [o for o in options if not o.slots_known]
-    print(f"{len(options)} Einträge aus {args.catalog} → {out.resolve()}")
+    quellen = ", ".join(Path(p).name for p in args.catalog)
+    print(f"{len(options)} Einträge aus {quellen} → {out.resolve()}")
     if without_times:
-        print(f"Hinweis: {len(without_times)} Einträge ohne Zeitangabe werden nicht angezeigt.")
+        print(f"{len(without_times)} davon ohne Termine — im Kalender unter "
+              f"„Noch ohne Termine“ gelistet:")
+        for option in without_times:
+            print(f"  · {option.label}")
     if args.open:
         webbrowser.open(out.resolve().as_uri())
     return 0
@@ -218,7 +232,7 @@ def cmd_template(args) -> int:
 
 
 def cmd_conflicts(args) -> int:
-    options = _read_selection(args.select, load_catalog(args.catalog))
+    options = _read_selection(args.select, _load_catalogs(args.catalog))
     conflicts = find_conflicts(options, get_semester(args.semester))
     if not conflicts:
         print(f"Keine Überschneidungen bei {len(options)} Veranstaltungen.")
@@ -264,7 +278,7 @@ def _parse_uhrzeit(value: str | None):
 
 def cmd_combos(args) -> int:
     """Konfliktfreie Kombinationen aus allen Gruppenalternativen."""
-    options = _mit_modulen(load_catalog(args.catalog), args.modules)
+    options = _mit_modulen(_load_catalogs(args.catalog), args.modules)
     semester = get_semester(args.semester)
     not_before = _parse_uhrzeit(args.not_before)
 
@@ -348,7 +362,7 @@ def cmd_combos(args) -> int:
 
 def cmd_anmelden(args) -> int:
     """Öffnet die TUMonline-Seiten der Auswahl - der Klick bleibt bei dir."""
-    options = _read_selection(args.select, load_catalog(args.catalog))
+    options = _read_selection(args.select, _load_catalogs(args.catalog))
     if not options:
         print("Keine Auswahl gefunden.", file=sys.stderr)
         return 2
@@ -377,7 +391,7 @@ def cmd_anmelden(args) -> int:
 def cmd_curriculum(args) -> int:
     """Plan gegen die Pflichtmodule der Studienordnung halten."""
     curriculum = load_curriculum(args.curriculum)
-    options = load_catalog(args.catalog)
+    options = _load_catalogs(args.catalog)
     ergebnis = check_plan(options, curriculum, semester=args.semester)
 
     print(f"{args.semester}. Fachsemester laut Studienordnung: "
@@ -501,7 +515,8 @@ def build_parser() -> argparse.ArgumentParser:
     courses.set_defaults(func=cmd_courses)
 
     plan = sub.add_parser("plan", help="Mögliche LVs als Planungskalender anzeigen")
-    plan.add_argument("--catalog", required=True, help="CSV/JSON mit dem LV-Angebot")
+    plan.add_argument("--catalog", required=True, action="append",
+                      help="LV-Angebot; mehrfach angebbar (z. B. Angebot + offene Posten)")
     plan.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     plan.add_argument("--out", default="planung.html")
     plan.add_argument("--title", default="LV-Planung")
@@ -524,7 +539,7 @@ def build_parser() -> argparse.ArgumentParser:
     template.set_defaults(func=cmd_template)
 
     conflicts = sub.add_parser("conflicts", help="Überschneidungen der Auswahl prüfen")
-    conflicts.add_argument("--catalog", required=True)
+    conflicts.add_argument("--catalog", required=True, action="append")
     conflicts.add_argument("--select", help="auswahl.json aus dem Planer")
     conflicts.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     conflicts.set_defaults(func=cmd_conflicts)
@@ -532,7 +547,7 @@ def build_parser() -> argparse.ArgumentParser:
     combos = sub.add_parser(
         "combos", help="Konfliktfreie Kombinationen der Gruppenalternativen suchen"
     )
-    combos.add_argument("--catalog", required=True)
+    combos.add_argument("--catalog", required=True, action="append")
     combos.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     combos.add_argument("--top", type=int, default=5, help="Wie viele anzeigen (Standard: 5)")
     combos.add_argument("--limit", type=int, default=20000, help="Obergrenze geprüfter Kombinationen")
@@ -545,7 +560,7 @@ def build_parser() -> argparse.ArgumentParser:
     anmelden = sub.add_parser(
         "anmelden", help="Anmeldelinks der Auswahl auflisten bzw. nacheinander öffnen"
     )
-    anmelden.add_argument("--catalog", required=True)
+    anmelden.add_argument("--catalog", required=True, action="append")
     anmelden.add_argument("--select", help="auswahl.json aus dem Planer")
     anmelden.add_argument("--open", action="store_true", help="Seiten im Browser öffnen")
     anmelden.set_defaults(func=cmd_anmelden)
@@ -554,13 +569,14 @@ def build_parser() -> argparse.ArgumentParser:
         "modules", help="Modulbeschreibungen auswerten und mit dem Katalog abgleichen"
     )
     modules.add_argument("--input", required=True, help="Kopierte Modulbeschreibungen")
-    modules.add_argument("--catalog", help="Katalog gegenprüfen: welche LV fehlt?")
+    modules.add_argument("--catalog", action="append",
+                         help="Katalog gegenprüfen: welche LV fehlt? (mehrfach angebbar)")
     modules.set_defaults(func=cmd_modules)
 
     curriculum = sub.add_parser(
         "curriculum", help="Plan gegen die Pflichtmodule der Studienordnung prüfen"
     )
-    curriculum.add_argument("--catalog", required=True)
+    curriculum.add_argument("--catalog", required=True, action="append")
     curriculum.add_argument("--semester", type=int, default=1, help="Fachsemester (Standard: 1)")
     curriculum.add_argument("--curriculum", help="Eigene Modulliste (CSV); Standard: WI B.Sc.")
     curriculum.set_defaults(func=cmd_curriculum)

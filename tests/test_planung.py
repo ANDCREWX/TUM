@@ -210,3 +210,31 @@ def test_planner_loads_no_external_resources():
     html = render_planner(OPTIONS, WS2627)
     assert "<script src" not in html
     assert "stylesheet" not in html
+
+
+# --- Einträge ohne Termine --------------------------------------------------
+
+def test_options_without_dates_are_listed_as_open_items():
+    """Bekannt, aber noch nicht terminiert: darf nicht unsichtbar sein."""
+    from tumcal.catalog import CourseOption
+
+    offen = CourseOption(title="Logik", kind="VO", ects=5.0,
+                         note="Termine noch nicht veröffentlicht")
+    data = _payload(render_planner(OPTIONS + [offen], WS2627))
+    assert len(data["openItems"]) == 1
+    assert data["openItems"][0]["title"] == "Logik"
+    assert data["openItems"][0]["ects"] == 5.0
+    # und taucht nicht als regulärer Termin auf
+    assert all(o["key"] != offen.key or not o["slots"] for o in data["options"])
+
+
+def test_open_items_do_not_form_choice_blocks():
+    """Ohne Termine lässt sich nichts kombinieren - der Eintrag bleibt trotzdem."""
+    from tumcal.catalog import CourseOption, combinations
+
+    offen = CourseOption(title="Logik", kind="UE", module="LOG", group="G1")
+    fest = CourseOption(title="Vorlesung", kind="VO",
+                        weekday=0, start_time=time(10), end_time=time(12))
+    found, total = combinations([offen, fest], WS2627)
+    assert total == 1
+    assert offen in found[0].options

@@ -56,8 +56,22 @@ def render_planner(
     title: str = "LV-Planung",
     preselected: list[str] | None = None,
 ) -> str:
+    # Einträge ohne Termine dürfen nicht unsichtbar verschwinden: gerade sie
+    # sind die offenen Posten, an die man sich erinnern muss.
+    offen = [o for o in options if not o.slots_known]
     payload = {
         "preselected": list(preselected or []),
+        "openItems": [
+            {
+                "title": o.title,
+                "kindLabel": o.kind_label,
+                "color": KIND_COLORS.get(o.kind, "--c-other"),
+                "module": o.module,
+                "ects": o.ects,
+                "note": o.note,
+            }
+            for o in offen
+        ],
         "options": options_to_json(options, semester),
         "weekdays": WEEKDAYS,
         "semester": {
@@ -132,6 +146,13 @@ _PLANNER = r"""<!DOCTYPE html>
   <div class="layout">
     <div>
       <div id="calendar"></div>
+      <div class="panel" id="openPanel" style="margin-top:18px; display:none">
+        <h2>Noch ohne Termine</h2>
+        <div class="hint">Bekannt, aber noch nicht terminiert — im Kalender
+          deshalb nicht zu sehen.</div>
+        <ul id="openList" style="font-size:13.5px; padding-left:20px"></ul>
+      </div>
+
       <div class="panel" style="margin-top:18px">
         <h2>Anmelde-Checkliste</h2>
         <div class="hint">In TUMonline anmelden – Reihenfolge egal, seit 20W kein
@@ -378,9 +399,20 @@ document.getElementById("view").onchange = renderCalendar;
 
 function update() { renderCalendar(); renderSummary(); }
 
+const offen = DATA.openItems || [];
+if (offen.length) {
+  document.getElementById("openPanel").style.display = "";
+  document.getElementById("openList").innerHTML = offen.map((o) =>
+    "<li><span class='tag' style='background:var(" + o.color + ")'>" + o.kindLabel +
+    "</span> " + o.title + (o.module ? " <span class='meta'>· " + o.module + "</span>" : "") +
+    (o.ects ? " <span class='meta'>· " + o.ects + " ECTS</span>" : "") +
+    (o.note ? "<div class='meta'>" + o.note + "</div>" : "") + "</li>").join("");
+}
+
 document.getElementById("sub").textContent = DATA.semester.label + " · Vorlesungszeit " +
   fmt(DATA.semester.start) + " – " + fmt(DATA.semester.end) + " · " +
-  DATA.options.length + " Einträge im Angebot";
+  DATA.options.length + " Einträge im Angebot" +
+  (offen.length ? " · " + offen.length + " noch ohne Termine" : "");
 renderOptions();
 update();
 </script>

@@ -539,8 +539,15 @@ def combinations(
     """
     blocks: dict[str, list[CourseOption]] = {}
     fixed: list[CourseOption] = []
-    alle_bloecke: set[str] = {o.exclusive_key for o in options if o.exclusive_key}
+    alle_bloecke: set[str] = {
+        o.exclusive_key for o in options if o.exclusive_key and o.slots_known
+    }
     for option in options:
+        if not option.slots_known:
+            # Ohne Termine lässt sich nichts kombinieren; der Eintrag bleibt
+            # trotzdem im Plan, damit er nicht vergessen wird.
+            fixed.append(option)
+            continue
         if option.exclusive_key:
             if not_before and option.typical_start and option.typical_start < not_before:
                 continue
