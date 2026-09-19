@@ -119,6 +119,8 @@ def parse_paste(text: str) -> list[CourseOption]:
                     lecturer="; ".join(course["lecturers"]),  # Namen enthalten selbst Kommata
                     room=group["slots"][0].room if group["slots"] else "",
                     note=group["note"],
+                    participants=group["participants"],
+                    capacity=group["capacity"],
                     slots=_merge_slots(group["slots"]),
                 )
             )
@@ -159,11 +161,12 @@ def parse_paste(text: str) -> list[CourseOption]:
 
         teilnehmer = _TEILNEHMER.search(line)
         if teilnehmer and group is not None:
-            group["note"] = (
-                f"{teilnehmer.group('count')} Teilnehmende"
-                if teilnehmer.group("count")
-                else f"max. {teilnehmer.group('max')} Plätze"
-            )
+            if teilnehmer.group("count"):
+                group["participants"] = int(teilnehmer.group("count"))
+                group["note"] = f"{group['participants']} Teilnehmende"
+            else:
+                group["capacity"] = int(teilnehmer.group("max"))
+                group["note"] = f"max. {group['capacity']} Plätze"
             continue
 
         gruppe = _GRUPPE.match(line)
@@ -178,6 +181,8 @@ def parse_paste(text: str) -> list[CourseOption]:
                         ("standardgruppe", "standardgroup") else name,
                 "slots": [],
                 "note": "",
+                "participants": None,
+                "capacity": None,
             }
             pending_lecturers = False
             continue
@@ -227,6 +232,8 @@ def to_json_catalog(options: list[CourseOption]) -> list[dict]:
             "Dozent": o.lecturer,
             "Link": o.url,
             "Hinweis": o.note,
+            "participants": o.participants,
+            "capacity": o.capacity,
             "slots": [
                 {
                     "date": s.day.isoformat(),

@@ -141,3 +141,78 @@ def test_conflict_free_combination_really_has_no_conflicts():
     assert found
     for combo in found:
         assert find_conflicts(combo.options, WS2627) == []
+
+
+# --- Zeitfilter und Größenpräferenz -----------------------------------------
+
+def test_typical_start_ignores_a_single_shifted_date():
+    """Ein Ausreißertermin darf die Gruppe nicht aus der Auswahl kippen."""
+    option = CourseOption(
+        title="A", kind="UE", module="MA", group="G1",
+        slots=(
+            Slot(day=date(2026, 10, 12), start=time(15), end=time(16, 30)),
+            Slot(day=date(2026, 10, 19), start=time(15), end=time(16, 30)),
+            Slot(day=date(2026, 10, 26), start=time(9, 45), end=time(11, 15)),
+        ),
+    )
+    assert option.typical_start == time(15)
+    assert option.earliest_start == time(9, 45)
+    assert len(option.early_slots(time(11))) == 1
+
+
+def test_not_before_filters_by_typical_start():
+    frueh = _opt("A", "MA", 0, time(8), time(10), "frueh")
+    spaet = _opt("A", "MA", 0, time(14), time(16), "spaet")
+    found, total = combinations([frueh, spaet], WS2627, not_before=time(11))
+    assert total == 1
+    assert [c.groups[0].group for c in found] == ["spaet"]
+
+
+def test_empty_block_raises_instead_of_dropping_the_course():
+    """Sonst verschwindet eine Pflichtveranstaltung stillschweigend."""
+    from tumcal.catalog import NoOptionLeft
+
+    nur_frueh = _opt("A", "MA", 0, time(8), time(10), "G1")
+    try:
+        combinations([nur_frueh], WS2627, not_before=time(11))
+    except NoOptionLeft as exc:
+        assert "MA" in str(exc)
+    else:
+        raise AssertionError("NoOptionLeft erwartet")
+
+
+def test_exceptions_report_only_chosen_groups():
+    """Fest stehende Veranstaltungen werden zentral gemeldet, nicht je Kombination."""
+    starr = CourseOption(
+        title="Vorlesung", kind="VO",
+        slots=(Slot(day=date(2026, 10, 15), start=time(10, 15), end=time(11, 45)),),
+    )
+    gruppe = CourseOption(
+        title="Übung", kind="UE", module="MA", group="G1",
+        slots=(
+            Slot(day=date(2026, 10, 13), start=time(15), end=time(16)),
+            Slot(day=date(2026, 10, 20), start=time(9), end=time(10)),
+        ),
+    )
+    found, _ = combinations([starr, gruppe], WS2627, not_before=time(11))
+    ausnahmen = found[0].exceptions(time(11))
+    assert len(ausnahmen) == 1
+    assert ausnahmen[0][0].group == "G1"
+
+
+def test_prefer_small_orders_by_group_size():
+    klein = CourseOption(title="A", kind="UE", module="MA", group="klein", participants=10,
+                         slots=(Slot(day=date(2026, 10, 12), start=time(14), end=time(16)),))
+    gross = CourseOption(title="A", kind="UE", module="MA", group="gross", participants=200,
+                         slots=(Slot(day=date(2026, 10, 12), start=time(14), end=time(16)),))
+    found, _ = combinations([klein, gross], WS2627, prefer_small=True)
+    assert [c.groups[0].group for c in found] == ["klein", "gross"]
+    assert found[0].total_size == 10
+
+
+def test_size_prefers_reported_count_over_capacity():
+    gemeldet = CourseOption(title="A", kind="UE", participants=33, capacity=100)
+    nur_kontingent = CourseOption(title="B", kind="UE", capacity=20)
+    assert gemeldet.size == 33
+    assert nur_kontingent.size == 20
+    assert CourseOption(title="C", kind="UE").size is None

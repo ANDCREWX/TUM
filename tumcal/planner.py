@@ -50,9 +50,13 @@ def options_to_json(options: list[CourseOption], semester: Semester) -> list[dic
 
 
 def render_planner(
-    options: list[CourseOption], semester: Semester, title: str = "LV-Planung"
+    options: list[CourseOption],
+    semester: Semester,
+    title: str = "LV-Planung",
+    preselected: list[str] | None = None,
 ) -> str:
     payload = {
+        "preselected": list(preselected or []),
         "options": options_to_json(options, semester),
         "weekdays": WEEKDAYS,
         "semester": {
@@ -164,8 +168,9 @@ const mondayOf = (d) => {
   return c;
 };
 
-let selected = new Set();
+let selected = new Set(DATA.preselected || []);
 try {
+  // Eine eigene Auswahl schlägt die Vorauswahl aus der Datei.
   const stored = localStorage.getItem(STORE);
   if (stored) selected = new Set(JSON.parse(stored));
 } catch (e) { /* Privates Fenster o. Ä. - Auswahl bleibt dann flüchtig. */ }

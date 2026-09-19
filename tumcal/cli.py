@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .catalog import (
     CatalogError,
+    NoOptionLeft,
     combinations,
     CourseOption,
     TEMPLATE_CSV,
@@ -121,8 +122,11 @@ def _read_selection(path: str | None, options: list[CourseOption]) -> list[Cours
 def cmd_plan(args) -> int:
     options = load_catalog(args.catalog)
     semester = get_semester(args.semester)
+    vorauswahl = [o.key for o in _read_selection(args.select, options)] if args.select else []
     out = Path(args.out)
-    out.write_text(render_planner(options, semester, args.title), encoding="utf-8")
+    out.write_text(
+        render_planner(options, semester, args.title, preselected=vorauswahl), encoding="utf-8"
+    )
 
     without_times = [o for o in options if not o.slots_known]
     print(f"{len(options)} Einträge aus {args.catalog} → {out.resolve()}")
@@ -193,11 +197,51 @@ def _woche(option, semester) -> str:
     return f"{'/'.join(tage)} {first.start:%H:%M}-{first.end:%H:%M}"
 
 
+def _parse_uhrzeit(value: str | None):
+    if not value:
+        return None
+    from datetime import datetime as _dt
+
+    for fmt in ("%H:%M", "%H"):
+        try:
+            return _dt.strptime(value, fmt).time()
+        except ValueError:
+            continue
+    raise SystemExit(f"Ungültige Uhrzeit '{value}', erwartet HH:MM.")
+
+
 def cmd_combos(args) -> int:
     """Konfliktfreie Kombinationen aus allen Gruppenalternativen."""
     options = load_catalog(args.catalog)
     semester = get_semester(args.semester)
-    found, total = combinations(options, semester, limit=args.limit)
+    not_before = _parse_uhrzeit(args.not_before)
+
+    if not_before:
+        # Fest stehende Veranstaltungen sind nicht wählbar - wer zu früh
+        # liegt, bleibt trotzdem im Plan. Das muss gesagt werden.
+        starr = [
+            o for o in options
+            if not o.exclusive_key and o.earliest_start and o.earliest_start < not_before
+        ]
+        entfallen = [
+            o for o in options
+            if o.exclusive_key and o.typical_start and o.typical_start < not_before
+        ]
+        print(f"Filter: nichts vor {not_before:%H:%M} — {len(entfallen)} Gruppen entfallen.")
+        if starr:
+            print("ACHTUNG, nicht wählbar und trotzdem früher:")
+            for option in starr:
+                fruehe = [e for e in option.events(semester) if e.start.time() < not_before]
+                zeiten = sorted({f"{WOCHENTAGE[e.start.weekday()]} {e.start:%H:%M}"
+                                 for e in fruehe})
+                print(f"  {option.label}: {', '.join(zeiten)} "
+                      f"({len(fruehe)} Termine) — daran führt kein Weg vorbei")
+        print()
+
+    found, total = combinations(
+        options, semester, limit=args.limit,
+        not_before=not_before, prefer_small=args.prefer_small,
+    )
 
     bloecke: dict[str, int] = {}
     for option in options:
@@ -215,20 +259,33 @@ def cmd_combos(args) -> int:
     nach_form: dict[tuple, list] = {}
     for combo in found:
         nach_form.setdefault(combo.shape(semester), []).append(combo)
-    formen = sorted(nach_form.values(), key=lambda g: (g[0].days, g[0].gap_minutes))
+    # Dieselbe Rangfolge wie die Suche - sonst wirft die Anzeige die
+    # Größensortierung wieder weg.
+    if args.prefer_small:
+        schluessel = lambda g: (g[0].days, g[0].total_size, g[0].gap_minutes)
+    else:
+        schluessel = lambda g: (g[0].days, g[0].gap_minutes)
+    formen = sorted(nach_form.values(), key=schluessel)
     print(f"{len(formen)} davon zeitlich verschieden (der Rest unterscheidet sich nur im Raum).\n")
 
     for index, gruppe in enumerate(formen[: args.top], 1):
-        combo = gruppe[0]
+        combo = min(gruppe, key=lambda c: c.total_size) if args.prefer_small else gruppe[0]
         leerlauf = f"{combo.gap_minutes // 60}h{combo.gap_minutes % 60:02d}"
         varianten = f", {len(gruppe)} Raumvarianten" if len(gruppe) > 1 else ""
-        print(f"[{index}] {combo.days} Tage/Woche, {leerlauf} Leerlauf pro Woche{varianten}")
+        groesse = f", {combo.total_size} Personen gesamt" if combo.total_size else ""
+        print(f"[{index}] {combo.days} Tage/Woche, {leerlauf} Leerlauf pro Woche"
+              f"{groesse}{varianten}")
+        if not_before:
+            for option, slot in combo.exceptions(not_before)[:2]:
+                print(f"      Ausnahme: {option.label[:40]} am "
+                      f"{slot.day:%d.%m.%Y} schon um {slot.start:%H:%M}")
         for option in combo.groups:
             raeume = sorted({c_o.group for c in gruppe for c_o in c.groups
                              if c_o.exclusive_key == option.exclusive_key})
             alternativen = f"  (+{len(raeume) - 1} weitere)" if len(raeume) > 1 else ""
+            groesse = f" [{option.size}]" if option.size else ""
             print(f"      {option.title[:42]:<42} {_woche(option, semester):<18}"
-                  f" {option.group}{alternativen}")
+                  f" {option.group}{groesse}{alternativen}")
         print()
     if len(formen) > args.top:
         print(f"… und {len(formen) - args.top} weitere Zeitvarianten. Mit --top mehr anzeigen.")
@@ -315,6 +372,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     plan.add_argument("--out", default="planung.html")
     plan.add_argument("--title", default="LV-Planung")
+    plan.add_argument("--select", help="auswahl.json: diese Einträge vorauswählen")
     plan.add_argument("--open", action="store_true", help="Danach im Browser öffnen")
     plan.set_defaults(func=cmd_plan)
 
@@ -344,6 +402,9 @@ def build_parser() -> argparse.ArgumentParser:
     combos.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     combos.add_argument("--top", type=int, default=5, help="Wie viele anzeigen (Standard: 5)")
     combos.add_argument("--limit", type=int, default=20000, help="Obergrenze geprüfter Kombinationen")
+    combos.add_argument("--not-before", help="Keine wählbare Gruppe vor dieser Uhrzeit (HH:MM)")
+    combos.add_argument("--prefer-small", action="store_true",
+                        help="Kleine Gruppen vor geringem Leerlauf einsortieren")
     combos.set_defaults(func=cmd_combos)
 
     anmelden = sub.add_parser(
@@ -368,7 +429,7 @@ def main(argv: list[str] | None = None) -> int:
     except BrokenPipeError:
         # Ausgabe nach `| head` o. Ä. - kein Fehlerfall.
         return 0
-    except (FetchError, CatalogError) as exc:
+    except (FetchError, CatalogError, NoOptionLeft) as exc:
         print(f"Fehler: {exc}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:

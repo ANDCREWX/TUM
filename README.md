@@ -95,6 +95,7 @@ Bedienelementen („weniger anzeigen", „Präferenz bearbeiten"):
 
 ```bash
 python3 -m tumcal plan --catalog paste.txt --open          # direkt planen
+python3 -m tumcal plan --catalog paste.txt --select auswahl.json   # mit Vorauswahl
 python3 -m tumcal convert --input paste.txt --out lv.json  # oder speichern
 ```
 
@@ -139,7 +140,16 @@ Bei mehreren Übungsschienen mit je einem Dutzend Gruppen ist die Frage nicht
 
 ```bash
 python3 -m tumcal combos --catalog paste.txt --top 5
+python3 -m tumcal combos --catalog paste.txt --not-before 11:00 --prefer-small
 ```
+
+`--not-before` verwirft wählbare Gruppen, die regelmäßig früher beginnen;
+ein einzelner verschobener Termin kippt eine Gruppe dabei nicht heraus,
+sondern wird als Ausnahme ausgewiesen. Fest stehende Veranstaltungen sind
+nicht wählbar — liegen sie früher, wird das gemeldet statt stillschweigend
+hingenommen. Bleibt für eine Veranstaltung keine Gruppe übrig, bricht der
+Lauf mit einer Meldung ab, statt die Veranstaltung aus dem Plan fallen zu
+lassen. `--prefer-small` sortiert kleine Gruppen nach vorn.
 
 Gruppen derselben Veranstaltung (gleiches Modul, gleiche Art) gelten als
 Wahlblock: aus jedem wird genau eine Gruppe gezogen, fest stehende
@@ -186,5 +196,5 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-72 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot
+78 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot
 und zwei echte TUMonline-Kopien (öffentliches LV-Angebot, keine persönlichen Daten).

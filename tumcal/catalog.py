@@ -12,6 +12,7 @@ import io
 import json
 import re
 from dataclasses import dataclass, field, replace
+from collections import Counter
 from itertools import product
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -61,6 +62,17 @@ class CatalogError(RuntimeError):
     pass
 
 
+class NoOptionLeft(RuntimeError):
+    """Kein Wahlblock-Eintrag hat den Filter überlebt."""
+
+    def __init__(self, blocks: list[str]):
+        self.blocks = blocks
+        namen = ", ".join(b.split("|")[0] for b in blocks)
+        super().__init__(
+            f"Für {namen} bleibt unter diesen Vorgaben keine einzige Gruppe übrig."
+        )
+
+
 @dataclass(frozen=True)
 class Slot:
     """Ein konkreter, aus TUMonline übernommener Einzeltermin."""
@@ -92,6 +104,8 @@ class CourseOption:
     url: str = ""
     deadline: date | None = None
     note: str = ""
+    participants: int | None = None   # aktuell angemeldet
+    capacity: int | None = None       # Platzobergrenze
     # Liegen konkrete Termine vor, haben sie Vorrang vor Wochentag/Rhythmus:
     # TUMonline kennt Ausfalltermine und Raumwechsel, die keine Regel abbildet.
     slots: tuple[Slot, ...] = ()
@@ -114,6 +128,31 @@ class CourseOption:
             return f"{self.title} ({self.kind_label})"
         group = self.group if self.group.lower().startswith("gruppe") else f"Gruppe {self.group}"
         return f"{self.title} ({self.kind_label}) · {group}"
+
+    @property
+    def size(self) -> int | None:
+        """Maß für 'wie voll ist die Gruppe' - gemeldete Zahl vor Kontingent."""
+        return self.participants if self.participants is not None else self.capacity
+
+    @property
+    def earliest_start(self) -> time | None:
+        starts = [s.start for s in self.slots]
+        if self.start_time is not None:
+            starts.append(self.start_time)
+        return min(starts) if starts else None
+
+    @property
+    def typical_start(self) -> time | None:
+        """Übliche Anfangszeit. Ein einzelner verschobener Termin darf eine
+        Gruppe nicht aus der Auswahl kippen - er wird gesondert gemeldet."""
+        if self.slots:
+            zaehler = Counter(slot.start for slot in self.slots)
+            return zaehler.most_common(1)[0][0]
+        return self.start_time
+
+    def early_slots(self, not_before: time) -> list[Slot]:
+        """Einzeltermine, die vor der Wunschzeit beginnen."""
+        return [s for s in self.slots if s.start < not_before]
 
     @property
     def exclusive_key(self) -> str:
@@ -427,6 +466,26 @@ class Combination:
     gap_minutes: int          # Leerlauf zwischen Terminen, Schnitt pro Woche
 
     @property
+    def total_size(self) -> int:
+        """Summe der Gruppengrößen - kleiner ist voller Hörsaal-freier."""
+        return sum(o.size or 0 for o in self.groups)
+
+    @property
+    def earliest(self) -> time | None:
+        starts = [o.earliest_start for o in self.options if o.earliest_start]
+        return min(starts) if starts else None
+
+    def exceptions(self, not_before: time) -> list[tuple[CourseOption, Slot]]:
+        """Einzelne Ausreißer-Termine trotz eingehaltener Regelzeit."""
+        # Nur wählbare Gruppen: fest stehende Veranstaltungen werden einmal
+        # zentral gemeldet, nicht bei jeder Kombination erneut.
+        out = []
+        for option in self.groups:
+            if option.typical_start and option.typical_start >= not_before:
+                out.extend((option, slot) for slot in option.early_slots(not_before))
+        return out
+
+    @property
     def groups(self) -> list[CourseOption]:
         return [o for o in self.options if o.group]
 
@@ -461,19 +520,37 @@ def _day_shape(options: list[CourseOption], semester: Semester) -> tuple[int, in
 
 
 def combinations(
-    options: list[CourseOption], semester: Semester, limit: int = 2000
+    options: list[CourseOption],
+    semester: Semester,
+    limit: int = 2000,
+    not_before: time | None = None,
+    prefer_small: bool = False,
 ) -> tuple[list[Combination], int]:
     """Alle konfliktfreien Kombinationen; je eine Gruppe pro Wahlblock.
 
-    Gibt zusätzlich zurück, wie viele Kombinationen insgesamt geprüft wurden.
+    not_before  - wählbare Gruppen, die früher beginnen, entfallen. Fest
+                  stehende Veranstaltungen bleiben davon unberührt; sie sind
+                  nicht wählbar und müssen gesondert gemeldet werden.
+    prefer_small - kleine Gruppen vor kompakter Woche einsortieren.
+
+    Gibt zusätzlich zurück, wie viele Kombinationen insgesamt möglich waren.
     """
     blocks: dict[str, list[CourseOption]] = {}
     fixed: list[CourseOption] = []
+    alle_bloecke: set[str] = {o.exclusive_key for o in options if o.exclusive_key}
     for option in options:
         if option.exclusive_key:
+            if not_before and option.typical_start and option.typical_start < not_before:
+                continue
             blocks.setdefault(option.exclusive_key, []).append(option)
         else:
             fixed.append(option)
+
+    leer = sorted(alle_bloecke - set(blocks))
+    if leer:
+        # Ein Block ohne verbleibende Gruppe heißt: diese Veranstaltung ist
+        # unter den Vorgaben gar nicht belegbar.
+        raise NoOptionLeft(leer)
 
     if not blocks:
         conflicts = find_conflicts(fixed, semester)
@@ -499,8 +576,11 @@ def combinations(
         days, gaps = _day_shape(selection, semester)
         found.append(Combination(options=selection, days=days, gap_minutes=gaps))
 
-    # Kompakte Wochen zuerst: wenige Tage, wenig Leerlauf.
-    found.sort(key=lambda c: (c.days, c.gap_minutes))
+    if prefer_small:
+        found.sort(key=lambda c: (c.days, c.total_size, c.gap_minutes))
+    else:
+        # Kompakte Wochen zuerst: wenige Tage, wenig Leerlauf.
+        found.sort(key=lambda c: (c.days, c.gap_minutes))
     return found, total
 
 
