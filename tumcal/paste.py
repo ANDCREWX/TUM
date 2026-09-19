@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, time
 
-from .catalog import CourseOption, Slot
+from .catalog import WEEKDAY_CODES, CourseOption, Slot
 from .model import detect_kind
 
 # "Termin  MI, 14.10.2026, 09:45 - 11:15"
@@ -39,6 +39,17 @@ _WOCHENTAG_KLAMMER = re.compile(r"^\((Mo|Di|Mi|Do|Fr|Sa|So)\)$", re.IGNORECASE)
 _MODUL = re.compile(r"\((?P<code>[A-Z]{2}\d{4,6}(?:_[A-Z])?)\b")
 # Führende LV-Nummer: "0240967009Diskrete Strukturen" oder "WI000021EVEconomics I"
 _LV_NUMMER = re.compile(r"^(?P<id>\d{6,}|[A-Z]{2}\d{6}[A-ZÄÖÜ]{0,2})(?=[A-ZÄÖÜ(])")
+
+# Kompakte Serienangabe einer LV-Seite:
+# "Montag  , 10:00 - 12:00 von 13.04.2026 bis 13.07.2026"
+_SERIE = re.compile(
+    r"^(?P<tag>Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)\s*,?\s*"
+    r"(?P<von>\d{1,2}:\d{2})\s*[-–]\s*(?P<bis>\d{1,2}:\d{2})\s+"
+    r"von\s+(?P<start>\d{1,2}\.\d{1,2}\.\d{4})\s+bis\s+(?P<ende>\d{1,2}\.\d{1,2}\.\d{4})",
+    re.IGNORECASE,
+)
+# "Vorlesung (VO)" / "Übung (UE)"
+_ART = re.compile(r"\((?P<kind>[A-Z]{2,3})\)\s*$")
 
 # Zeilen, die in der Kopierausgabe nur Bedienelemente sind.
 _RAUSCHEN = {
@@ -96,6 +107,57 @@ def _merge_slots(slots: list[Slot]) -> tuple[Slot, ...]:
         Slot(day=day, start=start, end=end, room=" / ".join(rooms))
         for (day, start, end), rooms in sorted(merged.items())
     )
+
+
+def _label_wert(zeilen: list[str], label: str) -> str:
+    """Auf einer LV-Seite steht der Wert in der Folgezeile."""
+    for index, zeile in enumerate(zeilen):
+        if zeile.strip() == label and index + 1 < len(zeilen):
+            return zeilen[index + 1].strip()
+    return ""
+
+
+def parse_lv_page(text: str) -> list[CourseOption]:
+    """Einzelne LV-Seite mit kompakter Serienangabe statt Terminliste."""
+    zeilen = [z.strip() for z in text.replace("\r\n", "\n").split("\n")]
+
+    titel = _label_wert(zeilen, "Titel")
+    if not titel:
+        return []
+    nummer = _label_wert(zeilen, "Nummer")
+    art_roh = _label_wert(zeilen, "Art")
+    art = _ART.search(art_roh)
+    kind = art.group("kind") if art else detect_kind(f"{art_roh} {titel}")
+    angeboten = _label_wert(zeilen, "Angeboten im Semester")
+    sprache = _label_wert(zeilen, "Unterrichtssprache/n") or _label_wert(zeilen, "Unterrichtssprache")
+
+    # Modulkennung steht bei diesen Seiten in der Studienplan-Verlinkung.
+    modul = ""
+    modul_treffer = re.search(r"\[([A-Z]{2}\d{4,6}(?:_[A-Z])?)\]", text)
+    if modul_treffer:
+        modul = modul_treffer.group(1)
+
+    hinweise = [h for h in (angeboten, sprache) if h]
+    out: list[CourseOption] = []
+    for zeile in zeilen:
+        serie = _SERIE.match(zeile)
+        if not serie:
+            continue
+        out.append(
+            CourseOption(
+                title=titel,
+                lv_id=nummer,
+                kind=kind,
+                module=modul,
+                weekday=WEEKDAY_CODES[serie.group("tag").lower()],
+                start_time=_parse_time(serie.group("von")),
+                end_time=_parse_time(serie.group("bis")),
+                first_date=datetime.strptime(serie.group("start"), "%d.%m.%Y").date(),
+                last_date=datetime.strptime(serie.group("ende"), "%d.%m.%Y").date(),
+                note=" · ".join(hinweise),
+            )
+        )
+    return out
 
 
 def parse_paste(text: str) -> list[CourseOption]:

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .catalog import (
     CatalogError,
+    out_of_semester,
     CourseOption,
     NoOptionLeft,
     combinations,
@@ -133,6 +134,20 @@ def _load_catalogs(pfade) -> list[CourseOption]:
     return options
 
 
+def _semesterpruefung(options, semester) -> None:
+    """Laut warnen, wenn Einträge aus einem anderen Semester stammen."""
+    fremd = out_of_semester(options, semester)
+    if not fremd:
+        return
+    wort = "Eintrag liegt" if len(fremd) == 1 else "Einträge liegen"
+    print(f"ACHTUNG: {len(fremd)} {wort} außerhalb der Vorlesungszeit "
+          f"({semester.label}):")
+    for option, zeitraum in fremd:
+        hinweis = f" — {option.note}" if option.note else ""
+        print(f"  {option.label}: {zeitraum}{hinweis}")
+    print("  Sie erscheinen in keinem Termin dieses Semesters.\n")
+
+
 def _mit_modulen(options: list[CourseOption], pfad: str | None) -> list[CourseOption]:
     """ECTS aus den Modulbeschreibungen ergänzen und Lücken melden."""
     if not pfad:
@@ -184,6 +199,7 @@ def cmd_modules(args) -> int:
 def cmd_plan(args) -> int:
     options = _mit_modulen(_load_catalogs(args.catalog), args.modules)
     semester = get_semester(args.semester)
+    _semesterpruefung(options, semester)
     vorauswahl = [o.key for o in _read_selection(args.select, options)] if args.select else []
     out = Path(args.out)
     out.write_text(
@@ -280,6 +296,7 @@ def cmd_combos(args) -> int:
     """Konfliktfreie Kombinationen aus allen Gruppenalternativen."""
     options = _mit_modulen(_load_catalogs(args.catalog), args.modules)
     semester = get_semester(args.semester)
+    _semesterpruefung(options, semester)
     not_before = _parse_uhrzeit(args.not_before)
 
     if not_before:

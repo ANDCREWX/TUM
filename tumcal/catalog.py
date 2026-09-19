@@ -392,7 +392,13 @@ def load_catalog_json(text: str) -> list[CourseOption]:
 
 def looks_like_paste(text: str) -> bool:
     """Aus TUMonline kopierter Text statt Tabelle?"""
-    return len(re.findall(r"^\s*Termin\s+", text, flags=re.MULTILINE)) >= 2
+    if len(re.findall(r"^\s*Termin\s+", text, flags=re.MULTILINE)) >= 2:
+        return True
+    # Einzelne LV-Seite: Titel/Nummer als Label plus kompakte Serienangabe.
+    return bool(
+        re.search(r"^\s*Titel\s*$", text, flags=re.MULTILINE)
+        and re.search(r"\bvon\s+\d{1,2}\.\d{1,2}\.\d{4}\s+bis\s+\d{1,2}\.\d{1,2}\.\d{4}", text)
+    )
 
 
 def load_catalog(path: str | Path) -> list[CourseOption]:
@@ -404,6 +410,10 @@ def load_catalog(path: str | Path) -> list[CourseOption]:
         from .paste import parse_paste
 
         options = parse_paste(text)
+        if not options:
+            from .paste import parse_lv_page
+
+            options = parse_lv_page(text)
         if not options:
             raise CatalogError(
                 "Der Text sieht nach einer TUMonline-Kopie aus, enthält aber keine "
@@ -428,6 +438,34 @@ class Conflict:
             f"{self.day.strftime('%d.%m.%Y')} {self.start:%H:%M}-{self.end:%H:%M}: "
             f"{self.first.label} ↔ {self.second.label}"
         )
+
+
+def out_of_semester(
+    options: list[CourseOption], semester: Semester
+) -> list[tuple[CourseOption, str]]:
+    """Einträge, deren Termine außerhalb der Vorlesungszeit liegen.
+
+    Ein LV-Eintrag aus einem anderen Semester liefert sonst schlicht keine
+    Termine und verschwindet unbemerkt aus dem Kalender.
+    """
+    draussen: list[tuple[CourseOption, str]] = []
+    for option in options:
+        if not option.slots_known:
+            continue
+
+        if option.slots:
+            tage = [slot.day for slot in option.slots]
+        elif option.first_date or option.last_date:
+            tage = [d for d in (option.first_date, option.last_date) if d]
+        else:
+            continue  # reine Wochentagsregel gilt per Definition im Semester
+
+        if any(semester.lecture_start <= tag <= semester.lecture_end for tag in tage):
+            continue
+        zeitraum = (f"{min(tage):%d.%m.%Y}–{max(tage):%d.%m.%Y}"
+                    if len(tage) > 1 else f"{tage[0]:%d.%m.%Y}")
+        draussen.append((option, zeitraum))
+    return draussen
 
 
 def find_conflicts(options: list[CourseOption], semester: Semester) -> list[Conflict]:

@@ -114,6 +114,15 @@ nicht: Sie erscheinen im Kalender unter „Noch ohne Termine" und zählen bei
 ECTS und Studienordnungs-Abgleich mit. So bleibt ein Modul sichtbar, dessen
 Termine TUMonline noch nicht veröffentlicht hat.
 
+Einzelne LV-Seiten ohne Terminliste werden ebenfalls verstanden: Dort steht
+statt vieler Termine eine kompakte Serie („Montag, 10:00 - 12:00 von 13.04.2026
+bis 13.07.2026"), aus der Wochentag, Uhrzeit und Zeitraum gelesen werden.
+
+**Semesterprüfung:** Liegen die Termine eines Eintrags außerhalb der
+Vorlesungszeit des gewählten Semesters, wird das gemeldet. Sonst liefert eine
+LV aus einem anderen Semester einfach null Termine und verschwindet unbemerkt
+aus dem Kalender.
+
 Einzeltermine haben Vorrang vor jeder Hochrechnung: Ausfalltage, Raumwechsel
 und einmalig verschobene Uhrzeiten bleiben so erhalten.
 
@@ -266,6 +275,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-110 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+120 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).
