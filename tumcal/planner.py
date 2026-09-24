@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 
@@ -61,8 +62,18 @@ def render_planner(
     # Einträge ohne Termine dürfen nicht unsichtbar verschwinden: gerade sie
     # sind die offenen Posten, an die man sich erinnern muss.
     offen = [o for o in options if not o.slots_known]
+    vorauswahl = list(preselected or [])
+    # Ein fester Speicherschlüssel ließ die Auswahl eines früheren Kalenders
+    # die Vorauswahl eines neuen überschreiben. Der Schlüssel hängt deshalb
+    # an Titel, Angebot und Vorauswahl.
+    kennung = hashlib.sha1(
+        json.dumps([title, sorted(o.key for o in options), vorauswahl],
+                   ensure_ascii=False).encode("utf-8")
+    ).hexdigest()[:12]
+
     payload = {
-        "preselected": list(preselected or []),
+        "planId": kennung,
+        "preselected": vorauswahl,
         "openItems": [
             {
                 "title": o.title,
@@ -148,6 +159,7 @@ _PLANNER = r"""<!DOCTYPE html>
     </select>
     <button id="saveSel">Auswahl speichern (JSON)</button>
     <button id="saveIcs">Als .ics exportieren</button>
+    <button id="reset" title="Zurück zur mitgelieferten Auswahl">Auswahl zurücksetzen</button>
   </div>
 
   <div class="layout">
@@ -185,7 +197,7 @@ _PLANNER = r"""<!DOCTYPE html>
 <script>
 const DATA = __DATA__;
 const DAY_START = 8 * 60, DAY_END = 22 * 60, PX_PER_MIN = 44 / 60;
-const STORE = "tumcal.auswahl";
+const STORE = "tumcal.auswahl." + (DATA.planId || "default");
 
 const pad = (n) => String(n).padStart(2, "0");
 const isoOf = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
@@ -200,7 +212,7 @@ const mondayOf = (d) => {
 
 let selected = new Set(DATA.preselected || []);
 try {
-  // Eine eigene Auswahl schlägt die Vorauswahl aus der Datei.
+  // Nur eine eigene Auswahl zu genau diesem Plan schlägt die Vorauswahl.
   const stored = localStorage.getItem(STORE);
   if (stored) selected = new Set(JSON.parse(stored));
 } catch (e) { /* Privates Fenster o. Ä. - Auswahl bleibt dann flüchtig. */ }
@@ -424,6 +436,13 @@ document.getElementById("saveIcs").onclick = () => {
   }));
   lines.push("END:VCALENDAR");
   download("planung.ics", lines.join("\r\n"), "text/calendar");
+};
+
+document.getElementById("reset").onclick = () => {
+  selected = new Set(DATA.preselected || []);
+  try { localStorage.removeItem(STORE); } catch (e) {}
+  renderOptions();
+  update();
 };
 
 document.getElementById("prev").onclick = () => { current.setDate(current.getDate() - 7); renderCalendar(); };

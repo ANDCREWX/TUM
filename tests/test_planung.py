@@ -238,3 +238,42 @@ def test_open_items_do_not_form_choice_blocks():
     found, total = combinations([offen, fest], WS2627)
     assert total == 1
     assert offen in found[0].options
+
+
+# --- Gespeicherte Auswahl je Plan trennen -----------------------------------
+
+def _plan_id(html: str) -> str:
+    return _payload(html)["planId"]
+
+
+def test_plan_id_changes_with_the_preselection():
+    """Sonst überschreibt die gespeicherte Auswahl eines früheren Kalenders
+    die Vorauswahl eines neuen."""
+    ohne = _plan_id(render_planner(OPTIONS, WS2627, "Plan"))
+    mit = _plan_id(render_planner(OPTIONS, WS2627, "Plan", preselected=[OPTIONS[0].key]))
+    andere = _plan_id(render_planner(OPTIONS, WS2627, "Plan", preselected=[OPTIONS[1].key]))
+    assert len({ohne, mit, andere}) == 3
+
+
+def test_plan_id_is_stable_for_identical_input():
+    a = _plan_id(render_planner(OPTIONS, WS2627, "Plan", preselected=[OPTIONS[0].key]))
+    b = _plan_id(render_planner(OPTIONS, WS2627, "Plan", preselected=[OPTIONS[0].key]))
+    assert a == b
+
+
+def test_plan_id_changes_with_the_offer():
+    voll = _plan_id(render_planner(OPTIONS, WS2627, "Plan"))
+    gekuerzt = _plan_id(render_planner(OPTIONS[:-1], WS2627, "Plan"))
+    assert voll != gekuerzt
+
+
+def test_storage_key_is_derived_from_the_plan_id():
+    html = render_planner(OPTIONS, WS2627, "Plan", preselected=[OPTIONS[0].key])
+    assert 'const STORE = "tumcal.auswahl." + (DATA.planId' in html
+
+
+def test_reset_button_restores_the_delivered_selection():
+    html = render_planner(OPTIONS, WS2627, "Plan", preselected=[OPTIONS[0].key])
+    assert 'id="reset"' in html
+    assert 'selected = new Set(DATA.preselected || []);' in html
+    assert "localStorage.removeItem(STORE)" in html

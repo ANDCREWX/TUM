@@ -330,6 +330,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-145 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+150 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).
