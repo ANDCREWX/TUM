@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import time
 import webbrowser
 from datetime import date, datetime
 from pathlib import Path
@@ -24,6 +25,7 @@ from .catalog import (
 from .fetch import ENV_VAR, FetchError, fetch_ics, read_ics, resolve_url, save_url
 from .curriculum import check_plan, load_curriculum
 from .exams import parse_exams
+from .export import load_export, looks_like_export
 from .module import apply_ects, ects_total, missing_lectures, parse_modules
 from .planner import render_planner
 from .semester import SEMESTERS, get_semester
@@ -281,12 +283,13 @@ WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
 
 def _woche(option, semester) -> str:
-    events = option.events(semester)
-    if not events:
+    """Alle regelmäßigen Wochentermine, nicht nur den ersten."""
+    muster = option.weekly_patterns()
+    if not muster:
         return "keine Termine"
-    first = events[0]
-    tage = sorted({WOCHENTAGE[e.day.weekday()] for e in events})
-    return f"{'/'.join(tage)} {first.start:%H:%M}-{first.end:%H:%M}"
+    return ", ".join(
+        f"{WOCHENTAGE[wd]} {von:%H:%M}-{bis:%H:%M}" for wd, von, bis, _ in muster
+    )
 
 
 def _parse_uhrzeit(value: str | None):
@@ -314,11 +317,13 @@ def cmd_combos(args) -> int:
         # liegt, bleibt trotzdem im Plan. Das muss gesagt werden.
         starr = [
             o for o in options
-            if not o.exclusive_key and o.earliest_start and o.earliest_start < not_before
+            if not o.exclusive_key and o.earliest_regular_start
+            and o.earliest_regular_start < not_before
         ]
         entfallen = [
             o for o in options
-            if o.exclusive_key and o.typical_start and o.typical_start < not_before
+            if o.exclusive_key and o.earliest_regular_start
+            and o.earliest_regular_start < not_before
         ]
         print(f"Filter: nichts vor {not_before:%H:%M} — {len(entfallen)} Gruppen entfallen.")
         if starr:
@@ -433,6 +438,63 @@ def cmd_anmelden(args) -> int:
             webbrowser.open(kopf.url)
     if not args.open:
         print("\nMit --open werden die Seiten nacheinander im Browser geöffnet.")
+    return 0
+
+
+def cmd_screen(args) -> int:
+    """Wahlmodule gegen die gesetzten Hauptmodule prüfen."""
+    options = _load_catalogs(args.catalog)
+    semester = get_semester(args.semester)
+    kern_codes = {c.upper() for c in args.core}
+    not_before = _parse_uhrzeit(args.not_before)
+
+    kern = [o for o in options if (o.module or "").upper() in kern_codes]
+    rest = [o for o in options if (o.module or "").upper() not in kern_codes]
+    if not kern:
+        print("Keine Hauptmodule gefunden. --core erwartet Modulkennungen.", file=sys.stderr)
+        return 2
+
+    print(f"Hauptmodule ({len(kern)} Lehrveranstaltungen):")
+    for option in sorted(kern, key=lambda o: o.title):
+        print(f"  {option.kind_label:<12} {option.title[:40]:<40} {_woche(option, semester)}")
+
+    kollidiert, zu_frueh, bleibt = [], [], []
+    for option in rest:
+        if not option.slots_known:
+            continue
+        if (not_before and option.earliest_regular_start
+                and option.earliest_regular_start < not_before):
+            zu_frueh.append(option)
+            continue
+        treffer = find_conflicts(kern + [option], semester)
+        eigene = [c for c in treffer
+                  if option.key in (c.first.key, c.second.key)]
+        if eigene:
+            kollidiert.append((option, eigene))
+        else:
+            bleibt.append(option)
+
+    print(f"\nRAUS — Kollision mit den Hauptmodulen ({len(kollidiert)}):")
+    for option, treffer in sorted(kollidiert, key=lambda x: x[0].title):
+        gegner = {c.first if c.second.key == option.key else c.second for c in treffer}
+        namen = ", ".join(sorted({g.title[:24] for g in gegner}))
+        print(f"  {option.title[:40]:<40} {_woche(option, semester)}")
+        print(f"{'':44}↔ {namen}")
+
+    if not_before:
+        print(f"\nRAUS — beginnt vor {not_before:%H:%M} ({len(zu_frueh)}):")
+        for option in sorted(zu_frueh, key=lambda o: o.title):
+            print(f"  {option.title[:40]:<40} {_woche(option, semester)}")
+
+    print(f"\nBLEIBT ({len(bleibt)}):")
+    for option in sorted(bleibt, key=lambda o: (o.earliest_regular_start or time(0), o.title)):
+        print(f"  {option.title[:40]:<40} {option.module or '–':<12} {_woche(option, semester)}")
+
+    if args.out:
+        Path(args.out).write_text(
+            json.dumps({"keys": [o.key for o in kern + bleibt]}, indent=2, ensure_ascii=False),
+            encoding="utf-8")
+        print(f"\nAuswahl (Hauptmodule + Rest) → {args.out}")
     return 0
 
 
@@ -624,6 +686,17 @@ def build_parser() -> argparse.ArgumentParser:
     modules.add_argument("--catalog", action="append",
                          help="Katalog gegenprüfen: welche LV fehlt? (mehrfach angebbar)")
     modules.set_defaults(func=cmd_modules)
+
+    screen = sub.add_parser(
+        "screen", help="Wahlmodule gegen gesetzte Hauptmodule prüfen"
+    )
+    screen.add_argument("--catalog", required=True, action="append")
+    screen.add_argument("--core", required=True, action="append",
+                        help="Modulkennung eines Hauptmoduls; mehrfach angebbar")
+    screen.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
+    screen.add_argument("--not-before", help="Nichts vor dieser Uhrzeit (HH:MM)")
+    screen.add_argument("--out", help="Verbleibende Auswahl als JSON speichern")
+    screen.set_defaults(func=cmd_screen)
 
     curriculum = sub.add_parser(
         "curriculum", help="Plan gegen die Pflichtmodule der Studienordnung prüfen"

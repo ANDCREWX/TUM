@@ -87,7 +87,30 @@ Solange du noch für nichts angemeldet bist, ist der persönliche Kalender leer.
 Für diesen Fall gibt es die **Planungsansicht**: das mögliche LV-Angebot als
 Wochenkalender, zum Anklicken, mit Überschneidungsprüfung.
 
-### Variante A: aus TUMonline kopieren (am einfachsten)
+### Variante A: CSV-Export aus TUMonline (am verlässlichsten)
+
+TUMonline kann den persönlichen Terminkalender als CSV exportieren — je Termin
+eine Zeile mit Datum, Uhrzeit, LV-Nummer, Art, Gruppe und Raum. Das ist die
+beste Quelle, weil nichts abgetippt wird:
+
+```bash
+python3 -m tumcal plan --catalog personal_export.csv --open
+python3 -m tumcal screen --catalog personal_export.csv \
+    --core IN0015 --core IN0021 --not-before 10:00
+```
+
+Die Datei kommt in cp1252 statt UTF-8 — das wird erkannt. Zeilen werden zu
+Lehrveranstaltungen gebündelt, parallel gelistete Räume zu einem Termin
+zusammengefasst.
+
+`screen` hält die übrigen Module gegen gesetzte Hauptmodule: Was kollidiert,
+was zu früh beginnt und was übrig bleibt. Maßgeblich für „nichts vor X Uhr"
+ist dabei der **früheste regelmäßige** Termin, nicht der häufigste: Eine LV mit
+Vorlesung Mi 08:00 und Übung Di 10:30 beginnt vor 10 Uhr, auch wenn die
+meisten Termine später liegen. Einzelne Ausreißer (weniger als drei
+Wiederholungen) gelten dagegen nicht als eigene Schiene.
+
+### Variante B: aus TUMonline kopieren
 
 In TUMonline die LV-Liste mit aufgeklappten Terminen markieren, kopieren, in
 eine Textdatei speichern — fertig. Der Parser versteht das Rohformat inklusive
@@ -137,7 +160,7 @@ Online-Tag ist kein Uni-Besuch.
 Einzeltermine haben Vorrang vor jeder Hochrechnung: Ausfalltage, Raumwechsel
 und einmalig verschobene Uhrzeiten bleiben so erhalten.
 
-### Variante B: als Tabelle
+### Variante C: als Tabelle
 
 Das Angebot ist in TUMonline **kein iCal-Feed** — alternativ als Tabelle:
 
@@ -301,6 +324,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-129 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+141 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).

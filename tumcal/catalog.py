@@ -158,6 +158,33 @@ class CourseOption:
             starts.append(self.start_time)
         return min(starts) if starts else None
 
+    def weekly_patterns(self, min_count: int = 3) -> list[tuple[int, time, time, int]]:
+        """Die wiederkehrenden Wochentermine als (Wochentag, von, bis, Anzahl).
+
+        Eine LV hat oft mehrere Schienen zu verschiedenen Zeiten (Vorlesung
+        und Übung). Ein einzelner Wert wie typical_start bildet das nicht ab.
+        """
+        if self.slots:
+            zaehler = Counter((s.day.weekday(), s.start, s.end) for s in self.slots)
+            regulaer = [(wd, von, bis, n) for (wd, von, bis), n in zaehler.items()
+                        if n >= min_count]
+            if not regulaer:  # sehr kurze Reihen: alles gilt als regulär
+                regulaer = [(wd, von, bis, n) for (wd, von, bis), n in zaehler.items()]
+            return sorted(regulaer)
+        if self.weekday is not None and self.start_time and self.end_time:
+            return [(self.weekday, self.start_time, self.end_time, 0)]
+        return []
+
+    @property
+    def earliest_regular_start(self) -> time | None:
+        """Frühester Beginn unter den regelmäßigen Terminen.
+
+        Maßgeblich für 'nichts vor X Uhr': Wer die LV belegt, muss zu allen
+        ihren Schienen, nicht nur zur häufigsten.
+        """
+        muster = self.weekly_patterns()
+        return min(m[1] for m in muster) if muster else self.typical_start
+
     @property
     def typical_start(self) -> time | None:
         """Übliche Anfangszeit. Ein einzelner verschobener Termin darf eine
@@ -417,8 +444,12 @@ def looks_like_paste(text: str) -> bool:
 
 
 def load_catalog(path: str | Path) -> list[CourseOption]:
+    from .export import _decode, looks_like_export, parse_export
+
     path = Path(path)
-    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    text = _decode(path)
+    if looks_like_export(text):
+        return parse_export(text)
     if path.suffix.lower() == ".json" or text.lstrip()[:1] in "[{":
         return load_catalog_json(text)
     if looks_like_paste(text):
@@ -582,7 +613,7 @@ class Combination:
         # zentral gemeldet, nicht bei jeder Kombination erneut.
         out = []
         for option in self.groups:
-            if option.typical_start and option.typical_start >= not_before:
+            if option.earliest_regular_start and option.earliest_regular_start >= not_before:
                 out.extend((option, slot) for slot in option.early_slots(not_before))
         return out
 
@@ -651,7 +682,8 @@ def combinations(
             fixed.append(option)
             continue
         if option.exclusive_key:
-            if not_before and option.typical_start and option.typical_start < not_before:
+            if (not_before and option.earliest_regular_start
+                    and option.earliest_regular_start < not_before):
                 continue
             blocks.setdefault(option.exclusive_key, []).append(option)
         else:

@@ -1,7 +1,7 @@
 """Tests für Übungsgruppen: englische Labels, Gruppencodes, Querverweise, Kombinationen."""
 
 import sys
-from datetime import date, time
+from datetime import date, time, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -187,12 +187,13 @@ def test_exceptions_report_only_chosen_groups():
         title="Vorlesung", kind="VO",
         slots=(Slot(day=date(2026, 10, 15), start=time(10, 15), end=time(11, 45)),),
     )
+    # Vier reguläre Termine um 15:00, einer weicht auf 09:00 aus.
     gruppe = CourseOption(
         title="Übung", kind="UE", module="MA", group="G1",
-        slots=(
-            Slot(day=date(2026, 10, 13), start=time(15), end=time(16)),
-            Slot(day=date(2026, 10, 20), start=time(9), end=time(10)),
-        ),
+        slots=tuple(
+            Slot(day=date(2026, 10, 13) + timedelta(weeks=i), start=time(15), end=time(16))
+            for i in range(4)
+        ) + (Slot(day=date(2026, 11, 17), start=time(9), end=time(10)),),
     )
     found, _ = combinations([starr, gruppe], WS2627, not_before=time(11))
     ausnahmen = found[0].exceptions(time(11))
@@ -240,3 +241,25 @@ def test_several_groups_of_one_course_share_a_block():
     """Sie sind Alternativen im selben Verfahren, keine konkurrierenden Termine."""
     economics = [o for o in OPTIONS if o.title == "Economics I"]
     assert len({o.exclusive_key for o in economics}) == 1
+
+
+def test_earliest_regular_start_ignores_single_outliers():
+    """Eine Ausnahme kippt die LV nicht, eine zweite Wochenschiene schon."""
+    regulaer = CourseOption(
+        title="Mit Ausreißer", kind="VO",
+        slots=tuple(Slot(day=date(2026, 10, 13) + timedelta(weeks=i),
+                         start=time(15), end=time(16)) for i in range(5))
+        + (Slot(day=date(2026, 12, 1), start=time(8), end=time(9)),),
+    )
+    assert regulaer.earliest_start == time(8)
+    assert regulaer.earliest_regular_start == time(15)
+
+    zwei_schienen = CourseOption(
+        title="Zwei Schienen", kind="VO",
+        slots=tuple(Slot(day=date(2026, 10, 13) + timedelta(weeks=i),
+                         start=time(15), end=time(16)) for i in range(5))
+        + tuple(Slot(day=date(2026, 10, 14) + timedelta(weeks=i),
+                     start=time(8), end=time(10)) for i in range(5)),
+    )
+    assert zwei_schienen.earliest_regular_start == time(8)
+    assert len(zwei_schienen.weekly_patterns()) == 2
