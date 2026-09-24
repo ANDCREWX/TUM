@@ -252,6 +252,23 @@ Abmeldefrist; Wiederholungstermine werden als solche erkannt. Mehrere
 Prüfungen am selben Tag werden hervorgehoben, auch wenn sie sich zeitlich
 nicht überschneiden.
 
+### Enge Raumwechsel
+
+Zwei Termine ohne Überschneidung können trotzdem unmöglich sein: TUM-Räume
+heißen `Gebäude.Geschoss.Raum`, und die Gebäudenummer verrät den Standort.
+Zwischen Garching und dem Stammgelände liegt eine U-Bahn-Fahrt.
+
+```bash
+python3 -m tumcal transit --catalog export.csv --select auswahl.json --max-gap 20
+```
+
+Gemeldet werden aufeinanderfolgende Termine, deren Pause kürzer ist als der
+Weg: gleicher Raum (0 min), gleiches Gebäude (5), anderes Gebäude am selben
+Standort (10), anderer Standort (40, geschätzt). Unbekannte Gebäudenummern
+werden als unbekannt ausgewiesen statt geraten. Im Planer erscheinen die engen
+Übergänge in einem eigenen Abschnitt und werden über die tatsächliche Auswahl
+berechnet, nicht über das ganze Angebot.
+
 ### Konfliktfreie Kombinationen finden
 
 Bei mehreren Übungsschienen mit je einem Dutzend Gruppen ist die Frage nicht
@@ -330,6 +347,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-150 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+159 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).

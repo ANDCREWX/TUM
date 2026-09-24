@@ -30,6 +30,7 @@ from .exams import parse_exams
 from .export import load_export, looks_like_export
 from .module import apply_ects, ects_total, missing_lectures, parse_modules
 from .planner import render_planner
+from .rooms import transits
 from .semester import SEMESTERS, get_semester
 from .model import TYPE_LABELS, filter_events, load_events
 from .render import render_html
@@ -522,6 +523,37 @@ def cmd_screen(args) -> int:
     return 0
 
 
+def cmd_transit(args) -> int:
+    """Enge Übergänge zwischen aufeinanderfolgenden Terminen prüfen."""
+    options = _read_selection(args.select, _load_catalogs(args.catalog))
+    semester = get_semester(args.semester)
+    uebergaenge = transits(options, semester, max_gap=args.max_gap)
+    if not uebergaenge:
+        print(f"Keine Übergänge mit höchstens {args.max_gap} Minuten Pause.")
+        return 0
+
+    # Je Wochentag und Paar nur einmal berichten.
+    gezeigt: set = set()
+    eng = 0
+    for t in sorted(uebergaenge, key=lambda t: (t.gap, t.weekday)):
+        schluessel = (t.weekday, t.first.key, t.second.key)
+        if schluessel in gezeigt:
+            continue
+        gezeigt.add(schluessel)
+        marke = "ENG" if t.tight else "ok "
+        if t.tight:
+            eng += 1
+        standort_a, standort_b = t.campuses
+        ort = (f"{standort_a or '?'} → {standort_b or '?'}"
+               if standort_a != standort_b else (standort_a or "?"))
+        print(f"[{marke}] {WOCHENTAGE[t.weekday]}  {t.gap:>2} min Pause, "
+              f"~{t.needed} min Weg — {t.verdict} ({ort})")
+        print(f"       {t.first.title[:40]:<40} {t.first_room[:46]}")
+        print(f"    →  {t.second.title[:40]:<40} {t.second_room[:46]}")
+    print(f"\n{len(gezeigt)} Übergänge, davon {eng} zu knapp.")
+    return 1 if eng else 0
+
+
 def cmd_curriculum(args) -> int:
     """Plan gegen die Pflichtmodule der Studienordnung halten."""
     curriculum = load_curriculum(args.curriculum)
@@ -724,6 +756,16 @@ def build_parser() -> argparse.ArgumentParser:
     screen.add_argument("--top", type=int, default=5, help="Wie viele Varianten zeigen")
     screen.add_argument("--out", help="Auswahl als JSON speichern")
     screen.set_defaults(func=cmd_screen)
+
+    transit = sub.add_parser(
+        "transit", help="Enge Raumwechsel zwischen aufeinanderfolgenden Terminen prüfen"
+    )
+    transit.add_argument("--catalog", required=True, action="append")
+    transit.add_argument("--select", help="auswahl.json")
+    transit.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
+    transit.add_argument("--max-gap", type=int, default=30,
+                         help="Bis zu wie vielen Minuten Pause geprüft wird")
+    transit.set_defaults(func=cmd_transit)
 
     curriculum = sub.add_parser(
         "curriculum", help="Plan gegen die Pflichtmodule der Studienordnung prüfen"

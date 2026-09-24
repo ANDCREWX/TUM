@@ -8,6 +8,7 @@ import json
 
 from .catalog import CourseOption
 from .render import KIND_COLORS, WEEKDAYS, _CSS, _monday
+from .rooms import WEGZEIT_GEBAEUDE, WEGZEIT_STANDORT, building, campus
 from .semester import Semester
 
 
@@ -45,6 +46,9 @@ def options_to_json(options: list[CourseOption], semester: Semester) -> list[dic
                         "end": e.end.strftime("%H:%M"),
                         "startMin": e.start.hour * 60 + e.start.minute,
                         "endMin": e.end.hour * 60 + e.end.minute,
+                        "room": e.location.split(" / ")[0].strip(),
+                        "building": building(e.location.split(" / ")[0]),
+                        "campus": campus(building(e.location.split(" / ")[0])),
                     }
                     for e in events
                 ],
@@ -73,6 +77,7 @@ def render_planner(
 
     payload = {
         "planId": kennung,
+        "transitMinutes": {"building": WEGZEIT_GEBAEUDE, "campus": WEGZEIT_STANDORT},
         "preselected": vorauswahl,
         "openItems": [
             {
@@ -165,6 +170,12 @@ _PLANNER = r"""<!DOCTYPE html>
   <div class="layout">
     <div>
       <div id="calendar"></div>
+      <div class="panel" id="transitPanel" style="margin-top:18px; display:none">
+        <h2>Enge Raumwechsel</h2>
+        <div class="hint">Pause kürzer als der Weg zwischen den Räumen.</div>
+        <ul id="transitList" style="font-size:13.5px; padding-left:20px"></ul>
+      </div>
+
       <div class="panel" id="openPanel" style="margin-top:18px; display:none">
         <h2>Noch ohne Termine</h2>
         <div class="hint">Bekannt, aber noch nicht terminiert — im Kalender
@@ -449,7 +460,56 @@ document.getElementById("prev").onclick = () => { current.setDate(current.getDat
 document.getElementById("next").onclick = () => { current.setDate(current.getDate() + 7); renderCalendar(); };
 document.getElementById("view").onchange = renderCalendar;
 
-function update() { renderCalendar(); renderSummary(); }
+function update() { renderCalendar(); renderSummary(); renderTransits(); }
+
+// Wie viel Weg liegt zwischen zwei Räumen?
+function wegzeit(a, b) {
+  if (!a.building || !b.building) return { min: 0, text: "unbekannt", wo: "?" };
+  const wo = a.campus === b.campus ? (a.campus || "?") : ((a.campus || "?") + " → " + (b.campus || "?"));
+  if (a.room === b.room) return { min: 0, text: "gleicher Raum", wo: wo };
+  if (a.building === b.building) return { min: 5, text: "gleiches Gebäude", wo: wo };
+  if (a.campus && b.campus && a.campus !== b.campus)
+    return { min: DATA.transitMinutes.campus, text: "anderer Standort", wo: wo };
+  return { min: DATA.transitMinutes.building, text: "anderes Gebäude", wo: wo };
+}
+
+// Übergänge müssen über die tatsächliche Auswahl laufen, nicht über das
+// ganze Angebot - sonst sind die Nachbarn andere.
+function engeUebergaenge() {
+  const proTag = {};
+  chosen().filter((o) => prefRank(o) <= 0).forEach((o) => {
+    o.slots.forEach((s) => { (proTag[s.date] = proTag[s.date] || []).push({ o: o, s: s }); });
+  });
+  const raus = [], gesehen = new Set();
+  Object.keys(proTag).sort().forEach((datum) => {
+    const items = proTag[datum].sort((x, y) => x.s.startMin - y.s.startMin || x.s.endMin - y.s.endMin);
+    for (let i = 0; i + 1 < items.length; i++) {
+      const a = items[i], b = items[i + 1];
+      const pause = b.s.startMin - a.s.endMin;
+      if (pause < 0 || pause > 20) continue;
+      const weg = wegzeit(a.s, b.s);
+      if (pause >= weg.min) continue;
+      const wochentag = (new Date(datum + "T00:00:00").getDay() + 6) % 7;
+      const schluessel = [wochentag, a.o.key, b.o.key].join("|");
+      if (gesehen.has(schluessel)) continue;
+      gesehen.add(schluessel);
+      raus.push({ weekday: DATA.weekdays[wochentag], gap: pause, needed: weg.min,
+                  verdict: weg.text, where: weg.wo, first: a.o.title, second: b.o.title,
+                  firstRoom: a.s.room, secondRoom: b.s.room });
+    }
+  });
+  return raus;
+}
+
+function renderTransits() {
+  const eng = engeUebergaenge();
+  document.getElementById("transitPanel").style.display = eng.length ? "" : "none";
+  document.getElementById("transitList").innerHTML = eng.map((t) =>
+    "<li><b>" + t.weekday + ", " + t.gap + " min Pause</b> — Weg etwa " + t.needed +
+    " min (" + t.verdict + ", " + t.where + ")<div class='meta'>" +
+    t.first + " · " + t.firstRoom + "<br>→ " + t.second + " · " + t.secondRoom +
+    "</div></li>").join("");
+}
 
 const offen = DATA.openItems || [];
 if (offen.length) {
