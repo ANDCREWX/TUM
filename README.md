@@ -103,6 +103,12 @@ Die Datei kommt in cp1252 statt UTF-8 — das wird erkannt. Zeilen werden zu
 Lehrveranstaltungen gebündelt, parallel gelistete Räume zu einem Termin
 zusammengefasst.
 
+Mit `--maximize` sucht `screen` zusätzlich die **größte überschneidungsfreie
+Auswahl** aus dem Rest — ein Maximum Independent Set auf dem Kollisionsgraphen,
+exakt statt heuristisch. Gruppen derselben Lehrveranstaltung schließen einander
+dabei aus: Sie sind Alternativen, keine zwei Module. Gleich große Lösungen
+werden nach Kompaktheit sortiert.
+
 `screen` hält die übrigen Module gegen gesetzte Hauptmodule: Was kollidiert,
 was zu früh beginnt und was übrig bleibt. Maßgeblich für „nichts vor X Uhr"
 ist dabei der **früheste regelmäßige** Termin, nicht der häufigste: Eine LV mit
@@ -324,6 +330,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-141 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+145 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).

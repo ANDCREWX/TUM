@@ -83,3 +83,48 @@ def test_lecturer_and_group_are_read():
 
 def test_empty_input_yields_nothing():
     assert parse_export('"DATUM";"VON";"BIS";"TITEL"\r\n') == []
+
+
+# --- Größte überschneidungsfreie Auswahl ------------------------------------
+
+def test_max_compatible_drops_candidates_colliding_with_the_core():
+    from tumcal.catalog import max_compatible
+
+    kern = [BY_TITLE["Diskrete Strukturen"]]
+    kandidaten = [BY_TITLE["Netzsicherheit"], BY_TITLE["Der Staat als Hacker"]]
+    verworfen, loesungen = max_compatible(kandidaten, WS2627, fixed=kern)
+    assert [o.title for o in verworfen] == ["Netzsicherheit"]
+    assert [o.title for o in loesungen[0]] == ["Der Staat als Hacker"]
+
+
+def test_max_compatible_finds_the_largest_set():
+    from tumcal.catalog import max_compatible
+
+    _, loesungen = max_compatible(list(OPTIONS), WS2627)
+    # Diskrete Strukturen (Di 14:15) und Netzsicherheit (Di 14:00) kollidieren,
+    # Automaten und "Der Staat als Hacker" passen zu beidem.
+    assert len(loesungen[0]) == 3
+    for lsg in loesungen:
+        titel = {o.title for o in lsg}
+        assert not {"Diskrete Strukturen", "Netzsicherheit"} <= titel
+
+
+def test_groups_of_one_course_never_appear_together():
+    """Zwei Gruppen derselben LV sind Alternativen, nicht zwei Module."""
+    from tumcal.catalog import CourseOption, Slot, max_compatible
+
+    gruppe_a = CourseOption(title="Übung", kind="UE", module="IN2003", group="G1",
+                            slots=(Slot(day=date(2026, 10, 19), start=time(8), end=time(10)),))
+    gruppe_b = CourseOption(title="Übung", kind="UE", module="IN2003", group="G2",
+                            slots=(Slot(day=date(2026, 10, 20), start=time(8), end=time(10)),))
+    _, loesungen = max_compatible([gruppe_a, gruppe_b], WS2627)
+    assert len(loesungen[0]) == 1            # trotz freier Termine nur eine
+    assert len(loesungen) == 2               # beide Gruppen sind gleichwertig
+
+
+def test_options_without_dates_are_ignored():
+    from tumcal.catalog import CourseOption, max_compatible
+
+    offen = CourseOption(title="Logik", kind="VO")
+    _, loesungen = max_compatible([offen, BY_TITLE["Der Staat als Hacker"]], WS2627)
+    assert [o.title for o in loesungen[0]] == ["Der Staat als Hacker"]

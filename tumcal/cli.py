@@ -12,6 +12,8 @@ from pathlib import Path
 
 from .catalog import (
     CatalogError,
+    _day_shape,
+    max_compatible,
     out_of_semester,
     project_to_semester,
     CourseOption,
@@ -490,11 +492,33 @@ def cmd_screen(args) -> int:
     for option in sorted(bleibt, key=lambda o: (o.earliest_regular_start or time(0), o.title)):
         print(f"  {option.title[:40]:<40} {option.module or '–':<12} {_woche(option, semester)}")
 
+    auswahl = bleibt
+    if args.maximize:
+        # --top begrenzt nur die Anzeige; die Suche muss alle gleich großen
+        # Lösungen sehen, sonst fehlt womöglich die kompakteste.
+        _, loesungen = max_compatible(bleibt, semester, fixed=kern, max_results=200)
+        if loesungen:
+            bewertet = []
+            for lsg in loesungen:
+                tage, praesenz, leerlauf = _day_shape(kern + lsg, semester)
+                bewertet.append((tage, leerlauf, lsg))
+            bewertet.sort(key=lambda x: (x[0], x[1]))
+            print(f"\nGRÖSSTE ÜBERSCHNEIDUNGSFREIE AUSWAHL: {len(loesungen[0])} Module "
+                  f"({len(loesungen)} gleich große Varianten)")
+            for nummer, (tage, leerlauf, lsg) in enumerate(bewertet[: args.top], 1):
+                print(f"\n  Variante {chr(64 + nummer)}: {tage} Tage, "
+                      f"{leerlauf // 60}h{leerlauf % 60:02d} Leerlauf/Woche")
+                for option in sorted(lsg, key=lambda o: o.weekly_patterns()[0][:2]):
+                    gruppe = f" [{option.group[:16]}]" if option.group else ""
+                    print(f"    {option.title[:36]:<36}{gruppe:<19} "
+                          f"{option.module or '–':<11} {_woche(option, semester)}")
+            auswahl = bewertet[0][2]
+
     if args.out:
         Path(args.out).write_text(
-            json.dumps({"keys": [o.key for o in kern + bleibt]}, indent=2, ensure_ascii=False),
+            json.dumps({"keys": [o.key for o in kern + auswahl]}, indent=2, ensure_ascii=False),
             encoding="utf-8")
-        print(f"\nAuswahl (Hauptmodule + Rest) → {args.out}")
+        print(f"\nAuswahl → {args.out}")
     return 0
 
 
@@ -695,7 +719,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Modulkennung eines Hauptmoduls; mehrfach angebbar")
     screen.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     screen.add_argument("--not-before", help="Nichts vor dieser Uhrzeit (HH:MM)")
-    screen.add_argument("--out", help="Verbleibende Auswahl als JSON speichern")
+    screen.add_argument("--maximize", action="store_true",
+                        help="Größte überschneidungsfreie Auswahl aus dem Rest suchen")
+    screen.add_argument("--top", type=int, default=5, help="Wie viele Varianten zeigen")
+    screen.add_argument("--out", help="Auswahl als JSON speichern")
     screen.set_defaults(func=cmd_screen)
 
     curriculum = sub.add_parser(

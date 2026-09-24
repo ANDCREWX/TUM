@@ -486,6 +486,64 @@ class Conflict:
         )
 
 
+def max_compatible(
+    options: list[CourseOption],
+    semester: Semester,
+    fixed: list[CourseOption] | None = None,
+    max_results: int = 50,
+) -> tuple[list[CourseOption], list[list[CourseOption]]]:
+    """Größte überschneidungsfreie Auswahl aus den Kandidaten.
+
+    fixed steht fest; Kandidaten, die damit kollidieren, fallen weg. Unter
+    den übrigen wird die größte Menge gesucht, die paarweise passt - das
+    ist ein Maximum Independent Set auf dem Kollisionsgraphen.
+
+    Liefert (verworfene Kandidaten, alle größten Lösungen).
+    """
+    fixed = list(fixed or [])
+    kandidaten, verworfen = [], []
+    for option in options:
+        if not option.slots_known:
+            continue
+        if fixed and find_conflicts(fixed + [option], semester):
+            verworfen.append(option)
+        else:
+            kandidaten.append(option)
+
+    n = len(kandidaten)
+    kollidiert = [[False] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = kandidaten[i], kandidaten[j]
+            # Gruppen derselben Lehrveranstaltung sind Alternativen, keine
+            # zwei Module: sie schließen einander aus, auch wenn ihre
+            # Termine sich nicht überschneiden.
+            gleiche_lv = bool(a.exclusive_key) and a.exclusive_key == b.exclusive_key
+            if gleiche_lv or find_conflicts([a, b], semester):
+                kollidiert[i][j] = kollidiert[j][i] = True
+
+    beste_groesse = 0
+    loesungen: list[list[int]] = []
+
+    def suche(index: int, gewaehlt: list[int]) -> None:
+        nonlocal beste_groesse, loesungen
+        # Selbst wenn alle Übrigen passen, reicht es nicht mehr?
+        if len(gewaehlt) + (n - index) < beste_groesse:
+            return
+        if index == n:
+            if len(gewaehlt) > beste_groesse:
+                beste_groesse, loesungen = len(gewaehlt), [list(gewaehlt)]
+            elif len(gewaehlt) == beste_groesse and len(loesungen) < max_results:
+                loesungen.append(list(gewaehlt))
+            return
+        if all(not kollidiert[index][g] for g in gewaehlt):
+            suche(index + 1, gewaehlt + [index])
+        suche(index + 1, gewaehlt)
+
+    suche(0, [])
+    return verworfen, [[kandidaten[i] for i in lsg] for lsg in loesungen]
+
+
 def project_to_semester(
     options: list[CourseOption], semester: Semester
 ) -> list[CourseOption]:
