@@ -238,8 +238,10 @@ def parse_paste(text: str) -> list[CourseOption]:
                 pending_lecturers = True
             continue
 
+        # Eine Zeile, die zugleich eine Gruppe eröffnet, gehört nicht hierher:
+        # sonst verschluckt die Teilnehmerangabe die Gruppenerkennung.
         teilnehmer = _TEILNEHMER.search(line)
-        if teilnehmer and group is not None:
+        if teilnehmer and group is not None and not _GRUPPE.match(line):
             if teilnehmer.group("count"):
                 group["participants"] = int(teilnehmer.group("count"))
                 group["note"] = f"{group['participants']} Teilnehmende"
