@@ -137,8 +137,12 @@ alle drei Formen werden erkannt. Die unter „Gleiche LVs:" aufgezählten
 Querverweise auf Parallelschienen werden ignoriert, sie sind keine eigenen
 Veranstaltungen.
 
+Auch das Listenformat der LV-Suche wird gelesen, bei dem die Art erst in der
+Folgezeile steht (`… - gewählte Gruppen: 1 / 1` / `VO | 2.0 SWS`).
+
 `--catalog` ist mehrfach angebbar, etwa um das Angebot mit einer Liste noch
-offener Posten zu verbinden. Einträge **ohne Termine** verschwinden dabei
+offener Posten zu verbinden. Dieselbe Lehrveranstaltung aus mehreren Quellen
+wird dabei nur einmal übernommen. Einträge **ohne Termine** verschwinden dabei
 nicht: Sie erscheinen im Kalender unter „Noch ohne Termine" und zählen bei
 ECTS und Studienordnungs-Abgleich mit. So bleibt ein Modul sichtbar, dessen
 Termine TUMonline noch nicht veröffentlicht hat.
@@ -347,6 +351,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-159 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+161 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).

@@ -36,9 +36,14 @@ _GLEICHE_LVS = re.compile(r"Gleiche\s+LVs:\s*$", re.IGNORECASE)
 # Nur ein Weekday-Zusatz bleibt im Titel stehen, alles andere fliegt raus.
 _WOCHENTAG_KLAMMER = re.compile(r"^\((Mo|Di|Mi|Do|Fr|Sa|So)\)$", re.IGNORECASE)
 # Modulkennung in Klammern: (IN0015), (WI000021_E, englisch)
-_MODUL = re.compile(r"\((?P<code>[A-Z]{2}\d{4,6}(?:_[A-Z])?)\b")
+_MODUL = re.compile(r"[(\[](?P<code>[A-Z]{2,3}\d{4,6}(?:_[A-Z])?)\b")
 # Führende LV-Nummer: "0240967009Diskrete Strukturen" oder "WI000021EVEconomics I"
-_LV_NUMMER = re.compile(r"^(?P<id>\d{6,}|[A-Z]{2}\d{6}[A-ZÄÖÜ]{0,2})(?=[A-ZÄÖÜ(])")
+_LV_NUMMER = re.compile(
+    r"^(?P<id>\d{6,}"                        # 0240967009
+    r"|[A-Z]{2}\d{6}[A-ZÄÖÜ]{0,2}"           # WI000021EÜ
+    r"|\d{2,}[A-Z]{2,3}\d{4,6}[A-Z]{0,2}"    # 00MA0902LV
+    r")(?=[A-ZÄÖÜ(\[])"
+)
 
 # Kompakte Serienangabe einer LV-Seite:
 # "Montag  , 10:00 - 12:00 von 13.04.2026 bis 13.07.2026"
@@ -48,6 +53,11 @@ _SERIE = re.compile(
     r"von\s+(?P<start>\d{1,2}\.\d{1,2}\.\d{4})\s+bis\s+(?P<ende>\d{1,2}\.\d{1,2}\.\d{4})",
     re.IGNORECASE,
 )
+# Kopfzeile der LV-Listen: "0240947544Business Analytics ... (IN2028)  -   gewählte
+# Gruppen: 1 / 1", mit der Art erst in der Folgezeile: "VO | 2.0 SWS".
+_ART_ZEILE = re.compile(r"^(?P<kind>[A-Z]{2,3})\s*\|\s*[\d.,]+\s*SWS", re.IGNORECASE)
+_GEWAEHLTE_GRUPPEN = re.compile(r"\s*-\s*gewählte Gruppen:.*$", re.IGNORECASE)
+
 # "Vorlesung (VO)" / "Übung (UE)"
 _ART = re.compile(r"\((?P<kind>[A-Z]{2,3})\)\s*$")
 
@@ -84,7 +94,8 @@ def _clean_title(rest: str) -> tuple[str, str, str]:
         # "(Mo)" trägt Information (Übungsschiene), "(IN0015)" nicht.
         return match.group(0) if _WOCHENTAG_KLAMMER.match(match.group(0)) else " "
 
-    title = re.sub(r"\([^)]*\)", _klammer, rest)
+    title = re.sub(r"\[[^\]]*\]", " ", rest)
+    title = re.sub(r"\([^)]*\)", _klammer, title)
     title = re.sub(r"\s+-\s+(Lecture|Vorlesung|Übung|Exercise|Practical)\s*$", "", title,
                    flags=re.IGNORECASE)
     title = re.sub(r"\s+", " ", title).strip(" -–—,;:")
@@ -250,6 +261,27 @@ def parse_paste(text: str) -> list[CourseOption]:
                 "capacity": None,
             }
             pending_lecturers = False
+            continue
+
+        # Variante mit Art in der Folgezeile.
+        folgt_art = (_ART_ZEILE.match(lines[index + 1].strip())
+                     if index + 1 < len(lines) else None)
+        if folgt_art and _GEWAEHLTE_GRUPPEN.search(line):
+            flush_group()
+            rest = _GEWAEHLTE_GRUPPEN.sub("", line).strip()
+            lv_id, title, module = _clean_title(rest)
+            if title:
+                course = {
+                    "lv_id": lv_id,
+                    "title": title,
+                    "module": module,
+                    "kind": detect_kind(f"{folgt_art.group('kind')} {title}"),
+                    "lecturers": [],
+                }
+                # Ohne eigene Gruppenzeile trotzdem sammeln können.
+                group = {"name": "", "slots": [], "note": "",
+                         "participants": None, "capacity": None}
+                pending_lecturers = False
             continue
 
         kopf = _KOPF.match(_GLEICHE_LVS.sub("", line).strip())

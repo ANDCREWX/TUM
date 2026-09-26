@@ -263,3 +263,46 @@ def test_earliest_regular_start_ignores_single_outliers():
     )
     assert zwei_schienen.earliest_regular_start == time(8)
     assert len(zwei_schienen.weekly_patterns()) == 2
+
+
+def test_list_header_with_kind_on_the_next_line():
+    """TUMonline-Listen: 'Nr Titel (IN2028) - gewählte Gruppen: 1 / 1' und 'VO | 2.0 SWS'."""
+    text = (
+        "ERSTAUSBILDUNG/WEITERBILDUNG\n"
+        "0240947544Business Analytics and Machine Learning (IN2028)  -   gewählte Gruppen: 1 / 1\n"
+        "VO | 2.0 SWS\n"
+        "Standardgruppe\n"
+        "Vortragende*r\n"
+        "Bichler, Martin\n"
+        "Nächster Termin\n"
+        "Termin  MO, 19.10.2026, 14:00 - 16:00\n"
+        'Raum 003, Hörsaal 2, "Interims II" (5416.01.003)\n'
+        "weniger anzeigen\n"
+        "Termin  MO, 26.10.2026, 14:00 - 16:00\n"
+        'Raum 003, Hörsaal 2, "Interims II" (5416.01.003)\n'
+    )
+    optionen = parse_paste(text)
+    assert len(optionen) == 1
+    option = optionen[0]
+    assert option.title == "Business Analytics and Machine Learning"
+    assert option.module == "IN2028"
+    assert option.lv_id == "0240947544"
+    assert option.kind == "VO"
+    assert len(option.slots) == 2
+
+
+def test_lv_number_with_embedded_module_code():
+    """'00MA0902LVAnalysis für Informatik [MA0902]' - Nummer und Kennung raus."""
+    text = (
+        "00MA0902LVAnalysis für Informatik [MA0902]  -   gewählte Gruppen: 1 / 1\n"
+        "VO | 4.0 SWS\n"
+        "Standardgruppe\n"
+        "Termin  DI, 13.10.2026, 08:30 - 10:00\n"
+        "Raum MW 0001, Hörsaal (5510.EG.001)\n"
+        "Termin  DO, 15.10.2026, 08:30 - 10:00\n"
+        "Raum MW 0001, Hörsaal (5510.EG.001)\n"
+    )
+    option = parse_paste(text)[0]
+    assert option.title == "Analysis für Informatik"
+    assert option.module == "MA0902"
+    assert option.lv_id == "00MA0902LV"

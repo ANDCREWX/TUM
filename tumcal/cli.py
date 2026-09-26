@@ -136,9 +136,21 @@ def _load_catalogs(pfade) -> list[CourseOption]:
     """Mehrere Katalogdateien zusammenführen (Angebot + offene Posten)."""
     if isinstance(pfade, (str, Path)):
         pfade = [pfade]
+    # Beim Zusammenführen mehrerer Quellen dieselbe LV nicht doppelt führen:
+    # sonst zählt sie doppelt und steht zweimal im Kalender.
     options: list[CourseOption] = []
+    gesehen: dict[str, str] = {}
+    doppelt = 0
     for pfad in pfade:
-        options.extend(load_catalog(pfad))
+        for option in load_catalog(pfad):
+            if option.key in gesehen:
+                doppelt += 1
+                continue
+            gesehen[option.key] = str(pfad)
+            options.append(option)
+    if doppelt:
+        print(f"{doppelt} doppelte Einträge übersprungen (gleiche LV in mehreren Quellen).",
+              file=sys.stderr)
     return options
 
 
