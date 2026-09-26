@@ -306,3 +306,42 @@ def test_lv_number_with_embedded_module_code():
     assert option.title == "Analysis für Informatik"
     assert option.module == "MA0902"
     assert option.lv_id == "00MA0902LV"
+
+
+def test_group_line_with_participants_on_the_same_line():
+    """'Standardgruppe (Teilnehmer*innen: 299 / max. unbegrenzt) Vortragende*r'."""
+    text = (
+        "WI000219WEInvestment and Financial Management (WI000219_E, englisch) - VI\n"
+        "Investment and Financial Management Prof. Weigert\n"
+        "Standardgruppe (Teilnehmer*innen: 299 / max. unbegrenzt) Vortragende*r\n"
+        "Weigert, Florian\n"
+        "Nächster Termin\n"
+        "Termin  MI, 14.10.2026, 11:30 - 13:00\n"
+        "Raum 0980, Audimax (0509.EG.980)\n"
+        "weniger anzeigen\n"
+        "Termin  MI, 21.10.2026, 11:30 - 13:00\n"
+        "Raum 0980, Audimax (0509.EG.980)\n"
+    )
+    optionen = parse_paste(text)
+    assert len(optionen) == 1
+    option = optionen[0]
+    assert option.group == ""                  # Standardgruppe ist keine Wahl
+    assert option.participants == 299
+    assert option.module == "WI000219_E"
+    assert option.kind == "VI"
+    assert len(option.slots) == 2, "ohne erkannte Gruppe gingen alle Termine verloren"
+
+
+def test_online_date_inside_a_room_series_is_kept():
+    text = (
+        "WI000219WEInvestment (WI000219_E) - VI\n"
+        "Standardgruppe (Teilnehmer*innen: 299 / max. unbegrenzt)\n"
+        "Termin  MI, 25.11.2026, 11:30 - 13:00\n"
+        "Raum 0980, Audimax (0509.EG.980)\n"
+        "Termin  MI, 02.12.2026, 11:30 - 13:00\n"
+        "Raum Online: Videokonferenz\n"
+    )
+    option = parse_paste(text)[0]
+    online = [s for s in option.slots if "Online" in s.room]
+    assert len(online) == 1
+    assert online[0].day == date(2026, 12, 2)

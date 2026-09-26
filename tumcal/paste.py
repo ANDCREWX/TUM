@@ -22,8 +22,11 @@ _TERMIN = re.compile(
 # "Raum N 1190, Hans-Heinrich-Meinke-Hörsaal (0101.02.190)"
 _RAUM = re.compile(r"^Raum\s+(?P<room>.+?)\s*$")
 # "Gruppe 1", "Gruppe A", "Standardgruppe"
+# Die Gruppenzeile steht mal allein, mal mit Teilnehmerzahl und weiteren
+# Angaben in derselben Zeile.
 _GRUPPE = re.compile(
-    r"^(?P<group>Standardgruppe|Standard group|(?:Gruppe|Group)\s+\S+)\s*$", re.IGNORECASE
+    r"^(?P<group>Standardgruppe|Standard group|(?:Gruppe|Group)\s+\S+?)"
+    r"(?=\s*$|\s*\()", re.IGNORECASE
 )
 # "(Teilnehmer*innen: 292 / max. unbegrenzt)"
 _TEILNEHMER = re.compile(
@@ -246,12 +249,32 @@ def parse_paste(text: str) -> list[CourseOption]:
             continue
 
         gruppe = _GRUPPE.match(line)
+        if gruppe and course is not None:
+            # Teilnehmerzahl steht hier eventuell in derselben Zeile.
+            flush_group()
+            name = gruppe.group("group")
+            group = {
+                "name": "" if name.lower().replace(" ", "") in
+                        ("standardgruppe", "standardgroup") else name,
+                "slots": [], "note": "", "participants": None, "capacity": None,
+            }
+            teil = _TEILNEHMER.search(line)
+            if teil:
+                if teil.group("count"):
+                    group["participants"] = int(teil.group("count"))
+                    group["note"] = f"{group['participants']} Teilnehmende"
+                else:
+                    group["capacity"] = int(teil.group("max"))
+                    group["note"] = f"max. {group['capacity']} Plätze"
+            pending_lecturers = "vortragende" in line.lower()
+            continue
+
         folgt_teilnehmerzahl = any(
             _TEILNEHMER.search(f) for f in lines[index + 1 : index + 3] if f.strip()
         )
-        if course is not None and (gruppe or (folgt_teilnehmerzahl and len(line) < 60)):
+        if course is not None and folgt_teilnehmerzahl and len(line) < 60:
             flush_group()
-            name = gruppe.group("group") if gruppe else line
+            name = line
             group = {
                 "name": "" if name.lower().replace(" ", "") in
                         ("standardgruppe", "standardgroup") else name,
