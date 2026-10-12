@@ -184,6 +184,23 @@ Die Spalte `Tag`/`Von`/`Bis`/`Rhythmus` genügt — die konkreten Termine werden
 über die Vorlesungszeit ausgerollt, inklusive Weihnachtsferien und Feiertagen.
 `wöchentlich`, `14-tägig` und `Blockveranstaltung` werden unterschieden.
 
+**Eigener Zeitraum, eigene Pause.** Ein Übungsbetrieb folgt selten genau der
+Vorlesungszeit: Er beginnt später und pausiert um Weihnachten länger als das
+Semester. Drei Spalten bilden das ab:
+
+| Spalte | Bedeutung |
+| --- | --- |
+| `Ab` | erster Termin — vorher wird nichts ausgerollt |
+| `Bis Datum` | letzter Termin |
+| `Ohne` | eigene vorlesungsfreie Blöcke, z. B. `21.12.2026-10.01.2027; 03.11.2026` |
+
+In `Ohne` sind Einzeldaten und Bereiche gemischt erlaubt, getrennt durch
+Komma, Semikolon oder Zeilenumbruch; als Trenner eines Bereichs funktionieren
+`-`, `–` und `bis`. Die Blöcke gelten inklusive. Beim `14-tägig`-Rhythmus
+zählt das Raster die Vorlesungswochen und erst danach greift die Pause — sonst
+würde ein ausgefallener Termin die ganze Reihe verschieben. Gesetzte Pausen
+gelten auch für aus TUMonline übernommene Einzeltermine.
+
 In der Planungsansicht:
 
 - Angebot als blasse Blöcke, deine Auswahl in Farbe
@@ -273,6 +290,39 @@ werden als unbekannt ausgewiesen statt geraten. Im Planer erscheinen die engen
 Übergänge in einem eigenen Abschnitt und werden über die tatsächliche Auswahl
 berechnet, nicht über das ganze Angebot.
 
+### Hörsaal oder Übertragungsraum (`--room`)
+
+Große Vorlesungen laufen in zwei Sälen gleichzeitig: Hörsaal und
+Übertragungsraum. TUMonline listet beide als eigene Zeile zur selben Uhrzeit,
+der Planer fasst sie zu einem Termin zusammen — und dann steht im Kalender
+`Interims I / MW 2001`. Wer weiß, wo er sitzt, wählt den Saal aus:
+
+```bash
+python3 -m tumcal plan --catalog paste.txt --room "IN0015=MW 2001" --open
+python3 -m tumcal transit --catalog paste.txt --select auswahl.json --room "IN0015=MW 2001"
+```
+
+Links steht Modulkennung, LV-Nummer oder ein Stück des Titels, rechts der
+Raumname oder der Raumcode; ein Teiltreffer genügt. Die Option ist mehrfach
+angebbar und gilt für alle Unterbefehle mit `--catalog`.
+
+Es wird **ausgewählt, nicht erfunden**: Bietet ein Termin den Wunschraum nicht
+an, bleibt er unverändert. Steht dort ein anderer Saal **im selben Gebäude**,
+wird dieser genommen und gemeldet — bei einer Vorlesung mit zwei Schienen ist
+der Übertragungsraum dienstags oft ein anderer als donnerstags:
+
+```
+Diskrete Strukturen (Vorlesung): 15 von 28 Terminen auf „MW 2001 …“ gesetzt.
+    13× Do: dort nicht im Angebot → MW 0001, Hörsaal (5510.EG.001) (gleiches Gebäude 5510).
+```
+
+Das ist mehr als Kosmetik: Die Wegzeitschätzung nimmt bei parallelen Räumen
+den ersten als Hauptraum. Nach der Wahl rechnet `transit` mit dem Saal, in dem
+du wirklich sitzt — aus „anderes Gebäude, 10 min" wird dann „gleicher Raum".
+Trifft ein Selektor Einträge, die den Raum gar nicht anbieten (ein Modulcode
+trifft auch alle Übungsgruppen), bleiben die still; gemeldet wird nur, wenn
+**kein** Eintrag den Raum führt.
+
 ### Konfliktfreie Kombinationen finden
 
 Bei mehreren Übungsschienen mit je einem Dutzend Gruppen ist die Frage nicht
@@ -351,6 +401,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-163 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+181 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).

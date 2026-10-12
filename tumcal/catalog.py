@@ -46,6 +46,7 @@ FIELD_ALIASES = {
     "lecturer": ("dozent", "dozentin", "lehrende", "lehrender", "vortragende", "lecturer"),
     "first_date": ("erster termin", "ab", "startdatum", "first date", "datum"),
     "last_date": ("letzter termin", "bis datum", "enddatum", "last date"),
+    "skip": ("ohne", "pause", "ausfall", "ausgenommen", "keine termine", "skip"),
     "url": ("link", "url", "tumonline", "anmeldung", "anmeldelink"),
     "deadline": ("anmeldefrist", "frist", "deadline", "anmeldung bis"),
     "note": ("hinweis", "bemerkung", "note", "kommentar"),
@@ -101,6 +102,9 @@ class CourseOption:
     lecturer: str = ""
     first_date: date | None = None
     last_date: date | None = None
+    # Eigene vorlesungsfreie Blöcke (inklusive). Eine Übungsschiene pausiert
+    # oft länger als das Semester: "Übungsgruppen finden nicht statt".
+    skip: tuple[tuple[date, date], ...] = ()
     url: str = ""
     deadline: date | None = None
     note: str = ""
@@ -214,29 +218,37 @@ class CourseOption:
             return True
         return self.start_time is not None and self.end_time is not None
 
+    def pauses(self, day: date) -> bool:
+        """Fällt der Tag in einen eigenen vorlesungsfreien Block?"""
+        return any(von <= day <= bis for von, bis in self.skip)
+
     def occurrences(self, semester: Semester) -> list[date]:
         """Konkrete Termine über die Vorlesungszeit."""
         if self.slots:
-            return sorted({slot.day for slot in self.slots})
+            return sorted({slot.day for slot in self.slots if not self.pauses(slot.day)})
         if self.weekday is None:
-            return [self.first_date] if self.first_date else []
+            if not self.first_date or self.pauses(self.first_date):
+                return []
+            return [self.first_date]
 
         days = semester.lecture_days(self.weekday)
         if self.first_date:
             days = [d for d in days if d >= self.first_date]
         if self.last_date:
             days = [d for d in days if d <= self.last_date]
-
+        # Der Rhythmus zählt die Vorlesungswochen, nicht die stattfindenden
+        # Termine - deshalb erst ausdünnen, dann die eigene Pause abziehen.
         if self.rhythm == RHYTHM_SINGLE:
-            return days[:1]
-        if self.rhythm == RHYTHM_BIWEEKLY:
-            return days[::2]
-        return days
+            days = days[:1]
+        elif self.rhythm == RHYTHM_BIWEEKLY:
+            days = days[::2]
+        return [d for d in days if not self.pauses(d)]
 
     def events(self, semester: Semester) -> list[CourseEvent]:
         if self.slots:
             return [self._event(s.day, s.start, s.end, s.room) for s in sorted(
-                self.slots, key=lambda s: (s.day, s.start))]
+                (s for s in self.slots if not self.pauses(s.day)),
+                key=lambda s: (s.day, s.start))]
         if self.start_time is None or self.end_time is None:
             return []
         return [
@@ -316,6 +328,26 @@ def parse_date_value(value: str) -> date | None:
     return None
 
 
+def parse_date_ranges(value: str) -> tuple[tuple[date, date], ...]:
+    """'21.12.2026-10.01.2027; 03.11.2026' -> zwei inklusive Blöcke.
+
+    Einzelne Daten werden zum Ein-Tages-Block. Was sich nicht als Datum lesen
+    lässt, wird übersprungen statt geraten.
+    """
+    bloecke: list[tuple[date, date]] = []
+    for teil in re.split(r"[;,\n]", value or ""):
+        teil = teil.strip()
+        if not teil:
+            continue
+        stuecke = [s for s in re.split(r"\s*(?:--|–|—|-|bis|to|until)\s*", teil) if s]
+        daten = [d for d in (parse_date_value(s) for s in stuecke) if d]
+        if not daten:
+            continue
+        von, bis = min(daten), max(daten)
+        bloecke.append((von, bis))
+    return tuple(sorted(bloecke))
+
+
 def parse_rhythm(value: str) -> str:
     token = (value or "").strip().lower()
     if not token:
@@ -359,6 +391,7 @@ def _row_to_option(row: dict[str, str], mapping: dict[str, str]) -> CourseOption
         lecturer=get("lecturer"),
         first_date=parse_date_value(get("first_date")),
         last_date=parse_date_value(get("last_date")),
+        skip=parse_date_ranges(get("skip")),
         url=get("url"),
         deadline=parse_date_value(get("deadline")),
         note=get("note"),
@@ -370,7 +403,20 @@ def _sniff_dialect(text: str) -> csv.Dialect | type[csv.Dialect]:
     try:
         return csv.Sniffer().sniff(sample, delimiters=";,\t|")
     except csv.Error:
-        return csv.excel_tab if "\t" in sample else csv.excel
+        pass
+    # Der Sniffer gibt auf, sobald die Spaltenzahl schwankt - etwa weil ein
+    # Freitextfeld ein Semikolon enthält. Dann entscheidet die Kopfzeile:
+    # ein Komma-Dialekt auf eine Semikolon-Datei liest alles als eine Spalte.
+    kopf = sample.splitlines()[0] if sample else ""
+    haeufigstes = max(";\t,|", key=kopf.count)
+    if kopf.count(haeufigstes) == 0:
+        return csv.excel
+    dialect = csv.excel_tab if haeufigstes == "\t" else csv.excel
+
+    class _Erkannt(dialect):  # type: ignore[valid-type, misc]
+        delimiter = haeufigstes
+
+    return _Erkannt
 
 
 def load_catalog_csv(text: str) -> list[CourseOption]:
@@ -788,8 +834,8 @@ def combinations(
 
 
 TEMPLATE_CSV = """\
-LV-Nummer;Titel;Art;Modul;ECTS;Gruppe;Tag;Von;Bis;Rhythmus;Raum;Dozent;Erster Termin;Anmeldefrist;Link;Hinweis
-IN0001;Einführung in die Informatik 1;VO;IN0001;6;;Mo;10:00;12:00;wöchentlich;MI HS 1;;;;https://campus.tum.de/tumonline/...;
-IN0001;Einführung in die Informatik 1;UE;IN0001;;Gruppe 01;Mi;14:00;16:00;wöchentlich;5605.EG.011;;;;https://campus.tum.de/tumonline/...;Übungsgruppe - nur eine wählen
-IN0001;Einführung in die Informatik 1;UE;IN0001;;Gruppe 02;Do;10:00;12:00;wöchentlich;5605.EG.011;;;;https://campus.tum.de/tumonline/...;Übungsgruppe - nur eine wählen
+LV-Nummer;Titel;Art;Modul;ECTS;Gruppe;Tag;Von;Bis;Rhythmus;Raum;Dozent;Ab;Bis Datum;Ohne;Anmeldefrist;Link;Hinweis
+IN0001;Einführung in die Informatik 1;VO;IN0001;6;;Mo;10:00;12:00;wöchentlich;MI HS 1;;;;;;https://campus.tum.de/tumonline/...;
+IN0001;Einführung in die Informatik 1;UE;IN0001;;Gruppe 01;Mi;14:00;16:00;wöchentlich;5605.EG.011;;26.10.2026;;21.12.2026-10.01.2027;;https://campus.tum.de/tumonline/...;Übungsgruppe - nur eine wählen
+IN0001;Einführung in die Informatik 1;UE;IN0001;;Gruppe 02;Do;10:00;12:00;wöchentlich;5605.EG.011;;26.10.2026;;21.12.2026-10.01.2027;;https://campus.tum.de/tumonline/...;Übungsgruppe - nur eine wählen
 """

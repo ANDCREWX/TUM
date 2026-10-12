@@ -2,6 +2,7 @@
 
 import json
 import sys
+from dataclasses import replace
 from datetime import date, time
 from pathlib import Path
 
@@ -13,10 +14,13 @@ from tumcal.catalog import (  # noqa: E402
     RHYTHM_WEEKLY,
     CatalogError,
     TEMPLATE_CSV,
+    CourseOption,
+    Slot,
     find_conflicts,
     load_catalog,
     load_catalog_csv,
     load_catalog_json,
+    parse_date_ranges,
     parse_date_value,
     parse_ects,
     parse_rhythm,
@@ -277,3 +281,95 @@ def test_reset_button_restores_the_delivered_selection():
     assert 'id="reset"' in html
     assert 'selected = new Set(DATA.preselected || []);' in html
     assert "localStorage.removeItem(STORE)" in html
+
+
+# --- Eigene Pause einer Übungsschiene --------------------------------------
+
+def test_date_ranges_are_parsed():
+    assert parse_date_ranges("21.12.2026-10.01.2027") == (
+        (date(2026, 12, 21), date(2027, 1, 10)),
+    )
+    assert parse_date_ranges("03.11.2026") == (
+        (date(2026, 11, 3), date(2026, 11, 3)),
+    )
+    assert parse_date_ranges("21.12.2026 bis 10.01.2027; 03.11.2026") == (
+        (date(2026, 11, 3), date(2026, 11, 3)),
+        (date(2026, 12, 21), date(2027, 1, 10)),
+    )
+    assert parse_date_ranges("") == ()
+    assert parse_date_ranges("irgendwann") == ()
+
+
+def test_a_pause_longer_than_the_semester_break_removes_those_dates():
+    """Der Übungsbetrieb pausiert oft länger als die Weihnachtsferien."""
+    uebung = CourseOption(
+        title="Übung zu Einführung in die Wirtschaftsinformatik",
+        module="IN0021", kind="UE", group="Gruppe 01",
+        weekday=2, start_time=time(8, 30), end_time=time(10, 0),
+        first_date=date(2026, 10, 26),
+    )
+    ohne_pause = uebung.occurrences(WS2627)
+    assert date(2026, 12, 23) in ohne_pause      # Semesterregel lässt ihn stehen
+
+    mit_pause = replace(
+        uebung, skip=((date(2026, 12, 21), date(2027, 1, 10)),)
+    ).occurrences(WS2627)
+    assert date(2026, 12, 23) not in mit_pause
+    assert date(2026, 12, 16) in mit_pause       # letzter Termin davor
+    assert date(2027, 1, 13) in mit_pause        # erster Termin danach
+    assert len(mit_pause) == len(ohne_pause) - 1
+
+
+def test_the_pause_also_drops_single_dates_from_tumonline():
+    option = CourseOption(
+        title="Übung", module="IN0021", kind="UE",
+        slots=(
+            Slot(date(2026, 12, 16), time(8, 30), time(10, 0), ""),
+            Slot(date(2026, 12, 23), time(8, 30), time(10, 0), ""),
+            Slot(date(2027, 1, 13), time(8, 30), time(10, 0), ""),
+        ),
+        skip=((date(2026, 12, 21), date(2027, 1, 10)),),
+    )
+    tage = [e.day for e in option.events(WS2627)]
+    assert tage == [date(2026, 12, 16), date(2027, 1, 13)]
+
+
+def test_the_pause_column_is_read_from_csv():
+    csv_text = (
+        "Titel;Art;Modul;Gruppe;Tag;Von;Bis;Ab;Ohne\n"
+        "Übung zu EWI;UE;IN0021;Gruppe 01;Mi;08:30;10:00;26.10.2026;"
+        "21.12.2026-10.01.2027\n"
+    )
+    option = load_catalog_csv(csv_text)[0]
+    assert option.skip == ((date(2026, 12, 21), date(2027, 1, 10)),)
+    assert option.first_date == date(2026, 10, 26)
+    tage = option.occurrences(WS2627)
+    assert tage[0] == date(2026, 10, 28)
+    assert date(2026, 12, 23) not in tage
+
+
+def test_biweekly_rhythm_counts_weeks_before_the_pause_is_applied():
+    """Erst ausdünnen, dann pausieren - sonst verschiebt die Pause das Raster."""
+    jede_zweite = CourseOption(
+        title="Übung", module="IN0021", kind="UE",
+        weekday=2, start_time=time(8, 30), end_time=time(10, 0),
+        rhythm=RHYTHM_BIWEEKLY,
+    )
+    ohne = jede_zweite.occurrences(WS2627)
+    mit = replace(
+        jede_zweite, skip=((date(2026, 12, 21), date(2027, 1, 10)),)
+    ).occurrences(WS2627)
+    assert set(mit) <= set(ohne)
+
+
+def test_a_semicolon_inside_a_field_does_not_break_the_delimiter_detection():
+    """Schwankende Spaltenzahl ließ den Sniffer auf Komma zurückfallen."""
+    csv_text = (
+        "Titel;Art;Modul;Gruppe;Tag;Von;Bis;Hinweis\n"
+        "Übung zu EWI;UE;IN0021;Gruppe 01;Mi;08:30;10:00;"
+        "Raum siehe TUMonline; Anmeldung 14.-18.10.2026\n"
+    )
+    option = load_catalog_csv(csv_text)[0]
+    assert option.title == "Übung zu EWI"
+    assert option.group == "Gruppe 01"
+    assert option.weekday == 2

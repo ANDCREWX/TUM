@@ -8,10 +8,11 @@ Terminen ein Fußweg, eine U-Bahn-Fahrt oder gar nichts liegt.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, replace
 from datetime import date, time
 
-from .catalog import CourseOption
+from .catalog import CourseOption, Slot
 from .semester import Semester
 
 _RAUMCODE = re.compile(r"\b(\d{4})\.[A-Z0-9]{1,3}\.[0-9A-Za-z]+")
@@ -103,6 +104,162 @@ def campus(building_no: str) -> str:
 def _erster_raum(location: str) -> str:
     """Parallel gelistete Räume: der erste ist der Hauptraum."""
     return (location or "").split(" / ")[0].strip()
+
+
+def _raeume(location: str) -> list[str]:
+    """Parallel gelistete Räume eines Termins einzeln."""
+    return [teil.strip() for teil in (location or "").split(" / ") if teil.strip()]
+
+
+@dataclass(frozen=True)
+class RoomWish:
+    """Wunschraum für eine Veranstaltung: 'IN0015=MW 2001'."""
+
+    selector: str   # Modul, LV-Nummer oder Teil des Titels
+    pattern: str    # Raumname oder Raumcode, Teiltreffer genügt
+
+
+def parse_room_wish(value: str) -> RoomWish:
+    selector, _, pattern = (value or "").partition("=")
+    selector, pattern = selector.strip(), pattern.strip()
+    if not selector or not pattern:
+        raise ValueError(
+            "--room erwartet AUSWAHL=RAUM, etwa --room \"IN0015=MW 2001\". "
+            f"Bekommen: {value!r}"
+        )
+    return RoomWish(selector=selector, pattern=pattern)
+
+
+def _trifft_veranstaltung(option: CourseOption, selector: str) -> bool:
+    nadel = selector.casefold()
+    felder = (option.module, option.lv_id, option.title, option.label)
+    return any(nadel in (feld or "").casefold() for feld in felder)
+
+
+def _trifft_raum(room: str, pattern: str) -> bool:
+    return pattern.casefold() in (room or "").casefold()
+
+
+WOCHENTAGE = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+
+
+def choose_rooms(
+    options: list[CourseOption], wishes: list[RoomWish]
+) -> tuple[list[CourseOption], list[str]]:
+    """Bei parallel gelisteten Räumen den gewünschten auswählen.
+
+    TUMonline listet Hörsaal und Übertragungsraum als zwei Zeilen zur selben
+    Zeit; der Planer fasst sie zu einem Termin zusammen. Wer weiß, in welchen
+    der beiden Säle er geht, will genau den im Kalender haben - auch weil die
+    Wegzeit zum nächsten Termin daran hängt.
+
+    Es wird ausgewählt, nicht erfunden: Steht der Wunschraum an einem Termin
+    nicht im Angebot, bleibt er unverändert und wird gemeldet.
+    """
+    if not wishes:
+        return options, []
+
+    ergebnis: list[CourseOption] = []
+    berichte: list[str] = []
+    # Ein Modulcode trifft die Vorlesung und alle ihre Übungsgruppen. Nur die
+    # Einträge zu melden, die den Raum anbieten, hält die Ausgabe lesbar;
+    # getroffen-aber-ohne-Angebot ist der Normalfall, nicht die Ausnahme.
+    getroffen: Counter[RoomWish] = Counter()
+    bedient: Counter[RoomWish] = Counter()
+    for option in options:
+        wunsch = next(
+            (w for w in wishes if _trifft_veranstaltung(option, w.selector)), None
+        )
+        if wunsch is None:
+            ergebnis.append(option)
+            continue
+        getroffen[wunsch] += 1
+        neu, bericht = _waehle_raum(option, wunsch)
+        ergebnis.append(neu)
+        if bericht:
+            bedient[wunsch] += 1
+            berichte.extend(bericht)
+
+    for wunsch in wishes:
+        if not getroffen[wunsch]:
+            berichte.append(
+                f"--room {wunsch.selector}={wunsch.pattern}: keine Veranstaltung "
+                f"im Katalog passt auf „{wunsch.selector}“."
+            )
+        elif not bedient[wunsch]:
+            berichte.append(
+                f"--room {wunsch.selector}={wunsch.pattern}: „{wunsch.pattern}“ "
+                f"steht in keinem Termin der {getroffen[wunsch]} passenden "
+                f"Einträge — nichts geändert."
+            )
+    return ergebnis, berichte
+
+
+def _waehle_raum(
+    option: CourseOption, wunsch: RoomWish
+) -> tuple[CourseOption, list[str]]:
+    angebot = [r for slot in option.slots for r in _raeume(slot.room)]
+    angebot += _raeume(option.room)
+    ziel = next((r for r in angebot if _trifft_raum(r, wunsch.pattern)), "")
+    if not ziel:
+        # Bietet dieser Eintrag den Raum nicht an, war er nicht gemeint.
+        # choose_rooms meldet den Fall gesammelt, falls ihn niemand anbietet.
+        return option, []
+
+    gebaeude = building(ziel)
+    gesetzt = 0
+    ersatz: Counter[tuple[int, str]] = Counter()
+    offen: Counter[int] = Counter()
+
+    neue_slots: list[Slot] = []
+    for slot in option.slots:
+        auswahl = _raeume(slot.room)
+        treffer = next((r for r in auswahl if _trifft_raum(r, wunsch.pattern)), "")
+        if treffer:
+            gesetzt += 1
+            neue_slots.append(replace(slot, room=treffer))
+            continue
+        # Kein Wunschraum: ein Raum im selben Gebäude ist der nächstbeste.
+        nachbar = next(
+            (r for r in auswahl if gebaeude and building(r) == gebaeude), ""
+        )
+        if nachbar:
+            ersatz[(slot.day.weekday(), nachbar)] += 1
+            neue_slots.append(replace(slot, room=nachbar))
+        else:
+            offen[slot.day.weekday()] += 1
+            neue_slots.append(slot)
+
+    neuer_raum = option.room
+    if option.slots:
+        # Der Kopfeintrag nennt sonst weiter einen Raum, in dem nach der Wahl
+        # kein einziger Termin mehr stattfindet.
+        haeufigster = Counter(s.room for s in neue_slots if s.room).most_common(1)
+        if haeufigster:
+            neuer_raum = haeufigster[0][0]
+    elif _raeume(option.room):
+        treffer = next(
+            (r for r in _raeume(option.room) if _trifft_raum(r, wunsch.pattern)), ""
+        )
+        if treffer:
+            neuer_raum = treffer
+            gesetzt += 1
+
+    neu = replace(option, slots=tuple(neue_slots), room=neuer_raum)
+
+    gesamt = len(option.slots) or (1 if _raeume(option.room) else 0)
+    bericht = [f"{option.label}: {gesetzt} von {gesamt} Terminen auf „{ziel}“ gesetzt."]
+    for (wochentag, raum), anzahl in sorted(ersatz.items(), key=lambda p: p[0]):
+        bericht.append(
+            f"    {anzahl}× {WOCHENTAGE[wochentag]}: dort nicht im Angebot → "
+            f"{raum} (gleiches Gebäude {gebaeude})."
+        )
+    for wochentag, anzahl in sorted(offen.items()):
+        bericht.append(
+            f"    {anzahl}× {WOCHENTAGE[wochentag]}: weder Wunschraum noch "
+            f"Gebäude {gebaeude} im Angebot → unverändert."
+        )
+    return neu, bericht
 
 
 def transits(
