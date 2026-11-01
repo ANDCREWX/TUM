@@ -25,6 +25,7 @@ from .catalog import (
     load_catalog,
 )
 from .fetch import ENV_VAR, FetchError, fetch_ics, read_ics, resolve_url, save_url
+from .ics import render_calendar
 from .curriculum import check_plan, load_curriculum
 from .exams import parse_exams
 from .export import load_export, looks_like_export
@@ -272,6 +273,28 @@ def cmd_plan(args) -> int:
             print(f"  · {option.label}")
     if args.open:
         webbrowser.open(out.resolve().as_uri())
+    return 0
+
+
+def cmd_ics(args) -> int:
+    options = _mit_modulen(_katalog(args), args.modules)
+    semester = get_semester(args.semester)
+    options = _semesterpruefung(options, semester, args.project)
+    if args.select:
+        options = _read_selection(args.select, options)
+
+    events = [e for option in options for e in option.events(semester)]
+    if not events:
+        print("Keine Termine - nichts zu schreiben.", file=sys.stderr)
+        return 1
+
+    out = Path(args.out)
+    out.write_text(render_calendar(events, name=args.title), encoding="utf-8")
+    erster, letzter = min(e.start for e in events), max(e.end for e in events)
+    print(f"{len(events)} Termine aus {len(options)} Veranstaltungen "
+          f"({erster:%d.%m.%Y} bis {letzter:%d.%m.%Y}) → {out.resolve()}")
+    print("Import: in Google Calendar, Apple Kalender oder Outlook als Datei "
+          "importieren (nicht abonnieren - die Datei aktualisiert sich nicht).")
     return 0
 
 
@@ -739,6 +762,25 @@ def build_parser() -> argparse.ArgumentParser:
                       help="Termine aus anderen Semestern als vorläufigen Zeitslot übernehmen")
     plan.add_argument("--open", action="store_true", help="Danach im Browser öffnen")
     plan.set_defaults(func=cmd_plan)
+
+    ics = sub.add_parser("ics", help="Auswahl als .ics-Datei schreiben")
+    ics.add_argument("--catalog", required=True, action="append",
+                     help="LV-Angebot bzw. persönlicher Export; mehrfach angebbar")
+    ics.add_argument("--room", action="append", metavar="AUSWAHL=RAUM",
+                     help="Bei parallelen Räumen diesen wählen, z. B. \"IN0015=MW 2001\"")
+    ics.add_argument("--time", action="append", metavar="AUSWAHL=VON[-BIS]",
+                     help="Uhrzeit überschreiben, z. B. \"IN2085=12:15\"")
+    ics.add_argument("--drop", action="append", metavar="AUSWAHL",
+                     help="Eintrag aus dem Angebot nehmen")
+    ics.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
+    ics.add_argument("--select", help="auswahl.json: nur diese Einträge schreiben")
+    ics.add_argument("--modules", help="Modulbeschreibungen: ECTS ergänzen")
+    ics.add_argument("--project", action="store_true",
+                     help="Termine aus anderen Semestern als vorläufigen Zeitslot übernehmen")
+    ics.add_argument("--title", default="TUM-Stundenplan",
+                     help="Kalendername in der Datei (X-WR-CALNAME)")
+    ics.add_argument("--out", default="stundenplan.ics")
+    ics.set_defaults(func=cmd_ics)
 
     convert = sub.add_parser(
         "convert", help="Aus TUMonline kopierten Text in einen Katalog (JSON) umwandeln"

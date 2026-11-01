@@ -418,6 +418,41 @@ blind auf Formularknöpfe klickt, die es nie gesehen hat, ist genau da falsch.
 Entspannend dabei: Seit WS 20/21 gibt es **kein „First come, first served"** —
 innerhalb des Anmeldezeitraums ist der Zeitpunkt egal, es zählt kein Sekundenvorsprung.
 
+## Stundenplan als .ics-Datei
+
+Die Gegenrichtung zu `build`: aus einem Katalog bzw. dem persönlichen Export
+eine Kalenderdatei schreiben, zum Import in Google Calendar, Apple Kalender
+oder Outlook.
+
+```bash
+python3 -m tumcal ics --catalog personal_export.csv --select auswahl.json \
+    --title "Mein Stundenplan" --out stundenplan.ics
+```
+
+`ics` versteht dieselben Korrekturen wie `plan` — `--select`, `--room`,
+`--time`, `--drop`, `--modules`, `--project` —, sodass die Datei genau den
+Plan enthält, den der Browser zeigt.
+
+Drei Entscheidungen, die den Unterschied zwischen „importiert" und
+„verschoben" machen:
+
+- **Zeiten stehen in UTC**, nicht als `TZID=Europe/Berlin`. Ein TZID-Verweis
+  verlangt laut RFC 5545 eine mitgelieferte `VTIMEZONE`-Komponente; ohne sie
+  verwerfen manche Clients den Termin oder schieben ihn um eine Stunde. Die
+  Umrechnung nimmt die Sommerzeit mit, auch für Termine über die Umstellung
+  hinweg.
+- **Zeilen sind auf 75 Oktette gefaltet** und auf Zeichengrenzen, nicht
+  mitten durch ein UTF-8-Zeichen. Umlaute in Raumnamen überleben das.
+- **UIDs sind stabil**, zusammengesetzt aus Modulkennung, Art und Datum — ohne
+  Uhrzeit. Korrigierst du später eine Uhrzeit und importierst neu, ändert der
+  Client den bestehenden Termin statt einen zweiten anzulegen. Vorlesung und
+  Übung eines Moduls bekommen getrennte Kennungen.
+
+Abgesagte Termine stehen als `STATUS:CANCELLED` in der Datei, statt zu fehlen.
+
+Eine importierte Datei aktualisiert sich **nicht** von selbst. Wer das will,
+abonniert den Token-Link direkt — siehe nächster Abschnitt.
+
 ## Kalender-Abo statt HTML
 
 Denselben Token-Link kannst du direkt in Google Calendar, Apple Kalender oder
@@ -437,6 +472,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-197 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+216 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).
