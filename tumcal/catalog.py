@@ -275,6 +275,19 @@ class CourseOption:
         )
 
 
+def matches_selector(option: CourseOption, selector: str) -> bool:
+    """Trifft ein Selektor wie 'IN0015', '0240967009' oder 'Diskrete' den Eintrag?
+
+    Verglichen wird gegen Modulkennung, LV-Nummer, Titel und Anzeigename;
+    ein Teiltreffer genügt, Groß- und Kleinschreibung spielt keine Rolle.
+    """
+    nadel = (selector or "").casefold()
+    if not nadel:
+        return False
+    felder = (option.module, option.lv_id, option.title, option.label)
+    return any(nadel in (feld or "").casefold() for feld in felder)
+
+
 def _normalize_header(name: str) -> str:
     return (name or "").strip().lower().lstrip("﻿")
 

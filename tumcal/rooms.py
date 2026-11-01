@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import date, time
 
-from .catalog import CourseOption, Slot
+from .catalog import CourseOption, Slot, matches_selector
 from .semester import Semester
 
 _RAUMCODE = re.compile(r"\b(\d{4})\.[A-Z0-9]{1,3}\.[0-9A-Za-z]+")
@@ -130,12 +130,6 @@ def parse_room_wish(value: str) -> RoomWish:
     return RoomWish(selector=selector, pattern=pattern)
 
 
-def _trifft_veranstaltung(option: CourseOption, selector: str) -> bool:
-    nadel = selector.casefold()
-    felder = (option.module, option.lv_id, option.title, option.label)
-    return any(nadel in (feld or "").casefold() for feld in felder)
-
-
 def _trifft_raum(room: str, pattern: str) -> bool:
     return pattern.casefold() in (room or "").casefold()
 
@@ -168,7 +162,7 @@ def choose_rooms(
     bedient: Counter[RoomWish] = Counter()
     for option in options:
         wunsch = next(
-            (w for w in wishes if _trifft_veranstaltung(option, w.selector)), None
+            (w for w in wishes if matches_selector(option, w.selector)), None
         )
         if wunsch is None:
             ergebnis.append(option)

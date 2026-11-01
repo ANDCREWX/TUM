@@ -323,6 +323,42 @@ Trifft ein Selektor Einträge, die den Raum gar nicht anbieten (ein Modulcode
 trifft auch alle Übungsgruppen), bleiben die still; gemeldet wird nur, wenn
 **kein** Eintrag den Raum führt.
 
+### Eigene Korrekturen: Uhrzeit und Streichungen
+
+TUMonline ist nicht immer das, was wirklich passiert. Eine Vorlesung steht als
+`12:00` im System und beginnt in der Praxis um `12:15`; ein Modul, das du doch
+nicht hörst, soll aus dem Kalender verschwinden statt ihn zu verstopfen. Beides
+sind Angaben über die eigene Realität, die in keinem Export stehen:
+
+```bash
+python3 -m tumcal plan --catalog export.csv \
+    --time "IN2085=12:15" \
+    --time "IN2028=14:15-15:45" \
+    --drop "Corporate Finance" --open
+```
+
+`--time AUSWAHL=VON` verschiebt nur den **Beginn**, das Ende bleibt stehen
+(`12:00-14:00` wird zu `12:15-14:00`). `--time AUSWAHL=VON-BIS` setzt beides —
+für das akademische Viertel also `"IN2085=12:15-13:45"`. Links steht wie bei
+`--room` Modulkennung, LV-Nummer oder ein Stück des Titels.
+
+Geändert werden nur die Termine zur **üblichen** Uhrzeit der Veranstaltung.
+Einmalig verschobene Termine bleiben, wie TUMonline sie meldet, und werden
+gemeldet — eine Korrektur „für alle Wochen" soll die Ausnahmen nicht
+stillschweigend mitnehmen:
+
+```
+Software Engineering … (Vorlesung): 14 Termine auf 12:15-14:00 gesetzt (vorher 12:00-14:00).
+    1× 16:00: abweichende Uhrzeit, unverändert gelassen.
+```
+
+`--drop AUSWAHL` nimmt Einträge aus dem Angebot. Der Selektor trifft so weit,
+wie er trifft: `--drop "Corporate Finance"` entfernt Vorlesung und Übung,
+`--drop "Corporate Finance (Vorlesung)"` nur die Vorlesung. Was entfernt wurde,
+wird einzeln aufgelistet; trifft ein Selektor nichts, sagt das Programm es,
+statt stillschweigend weiterzumachen. Beide Optionen sind mehrfach angebbar und
+gelten für alle Unterbefehle mit `--catalog`.
+
 ### Konfliktfreie Kombinationen finden
 
 Bei mehreren Übungsschienen mit je einem Dutzend Gruppen ist die Frage nicht
@@ -401,6 +437,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-181 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+197 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).

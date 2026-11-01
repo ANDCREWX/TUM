@@ -30,6 +30,12 @@ from .exams import parse_exams
 from .export import load_export, looks_like_export
 from .module import apply_ects, ects_total, missing_lectures, parse_modules
 from .planner import render_planner
+from .overrides import (
+    apply_time_overrides,
+    drop_options,
+    parse_drop,
+    parse_time_override,
+)
 from .rooms import RoomWish, choose_rooms, parse_room_wish, transits
 from .semester import SEMESTERS, get_semester
 from .model import TYPE_LABELS, filter_events, load_events
@@ -155,14 +161,23 @@ def _load_catalogs(pfade) -> list[CourseOption]:
 
 
 def _katalog(args) -> list[CourseOption]:
-    """Katalog laden und dabei gewünschte Räume auswählen."""
+    """Katalog laden und die eigenen Korrekturen anwenden."""
     options = _load_catalogs(args.catalog)
-    rohe_wuensche = getattr(args, "room", None) or []
+    berichte: list[str] = []
     try:
-        wuensche = [parse_room_wish(w) for w in rohe_wuensche]
+        wuensche = [parse_room_wish(w) for w in getattr(args, "room", None) or []]
+        zeiten = [parse_time_override(z) for z in getattr(args, "time", None) or []]
+        weg = [parse_drop(d) for d in getattr(args, "drop", None) or []]
     except ValueError as fehler:
         raise SystemExit(str(fehler)) from None
-    options, berichte = choose_rooms(options, wuensche)
+
+    options, meldungen = drop_options(options, weg)
+    berichte += meldungen
+    options, meldungen = apply_time_overrides(options, zeiten)
+    berichte += meldungen
+    options, meldungen = choose_rooms(options, wuensche)
+    berichte += meldungen
+
     for zeile in berichte:
         print(zeile, file=sys.stderr)
     return options
@@ -711,6 +726,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="LV-Angebot; mehrfach angebbar (z. B. Angebot + offene Posten)")
     plan.add_argument("--room", action="append", metavar="AUSWAHL=RAUM",
                       help="Bei parallelen Räumen diesen wählen, z. B. \"IN0015=MW 2001\"")
+    plan.add_argument("--time", action="append", metavar="AUSWAHL=VON[-BIS]",
+                      help="Uhrzeit überschreiben, z. B. \"IN2085=12:15\"")
+    plan.add_argument("--drop", action="append", metavar="AUSWAHL",
+                      help="Eintrag aus dem Angebot nehmen")
     plan.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     plan.add_argument("--out", default="planung.html")
     plan.add_argument("--title", default="LV-Planung")
@@ -738,6 +757,10 @@ def build_parser() -> argparse.ArgumentParser:
     conflicts.add_argument("--catalog", required=True, action="append")
     conflicts.add_argument("--room", action="append", metavar="AUSWAHL=RAUM",
                            help="Bei parallelen Räumen diesen wählen, z. B. \"IN0015=MW 2001\"")
+    conflicts.add_argument("--time", action="append", metavar="AUSWAHL=VON[-BIS]",
+                           help="Uhrzeit überschreiben, z. B. \"IN2085=12:15\"")
+    conflicts.add_argument("--drop", action="append", metavar="AUSWAHL",
+                           help="Eintrag aus dem Angebot nehmen")
     conflicts.add_argument("--select", help="auswahl.json aus dem Planer")
     conflicts.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     conflicts.set_defaults(func=cmd_conflicts)
@@ -748,6 +771,10 @@ def build_parser() -> argparse.ArgumentParser:
     combos.add_argument("--catalog", required=True, action="append")
     combos.add_argument("--room", action="append", metavar="AUSWAHL=RAUM",
                         help="Bei parallelen Räumen diesen wählen, z. B. \"IN0015=MW 2001\"")
+    combos.add_argument("--time", action="append", metavar="AUSWAHL=VON[-BIS]",
+                        help="Uhrzeit überschreiben, z. B. \"IN2085=12:15\"")
+    combos.add_argument("--drop", action="append", metavar="AUSWAHL",
+                        help="Eintrag aus dem Angebot nehmen")
     combos.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     combos.add_argument("--top", type=int, default=5, help="Wie viele anzeigen (Standard: 5)")
     combos.add_argument("--limit", type=int, default=20000, help="Obergrenze geprüfter Kombinationen")
@@ -765,6 +792,10 @@ def build_parser() -> argparse.ArgumentParser:
     anmelden.add_argument("--catalog", required=True, action="append")
     anmelden.add_argument("--room", action="append", metavar="AUSWAHL=RAUM",
                           help="Bei parallelen Räumen diesen wählen, z. B. \"IN0015=MW 2001\"")
+    anmelden.add_argument("--time", action="append", metavar="AUSWAHL=VON[-BIS]",
+                          help="Uhrzeit überschreiben, z. B. \"IN2085=12:15\"")
+    anmelden.add_argument("--drop", action="append", metavar="AUSWAHL",
+                          help="Eintrag aus dem Angebot nehmen")
     anmelden.add_argument("--select", help="auswahl.json aus dem Planer")
     anmelden.add_argument("--open", action="store_true", help="Seiten im Browser öffnen")
     anmelden.set_defaults(func=cmd_anmelden)
@@ -777,6 +808,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Katalog gegenprüfen: welche LV fehlt? (mehrfach angebbar)")
     modules.add_argument("--room", action="append", metavar="AUSWAHL=RAUM",
                          help="Bei parallelen Räumen diesen wählen, z. B. \"IN0015=MW 2001\"")
+    modules.add_argument("--time", action="append", metavar="AUSWAHL=VON[-BIS]",
+                         help="Uhrzeit überschreiben, z. B. \"IN2085=12:15\"")
+    modules.add_argument("--drop", action="append", metavar="AUSWAHL",
+                         help="Eintrag aus dem Angebot nehmen")
     modules.set_defaults(func=cmd_modules)
 
     screen = sub.add_parser(
@@ -785,6 +820,10 @@ def build_parser() -> argparse.ArgumentParser:
     screen.add_argument("--catalog", required=True, action="append")
     screen.add_argument("--room", action="append", metavar="AUSWAHL=RAUM",
                         help="Bei parallelen Räumen diesen wählen, z. B. \"IN0015=MW 2001\"")
+    screen.add_argument("--time", action="append", metavar="AUSWAHL=VON[-BIS]",
+                        help="Uhrzeit überschreiben, z. B. \"IN2085=12:15\"")
+    screen.add_argument("--drop", action="append", metavar="AUSWAHL",
+                        help="Eintrag aus dem Angebot nehmen")
     screen.add_argument("--core", required=True, action="append",
                         help="Modulkennung eines Hauptmoduls; mehrfach angebbar")
     screen.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
@@ -801,6 +840,10 @@ def build_parser() -> argparse.ArgumentParser:
     transit.add_argument("--catalog", required=True, action="append")
     transit.add_argument("--room", action="append", metavar="AUSWAHL=RAUM",
                          help="Bei parallelen Räumen diesen wählen, z. B. \"IN0015=MW 2001\"")
+    transit.add_argument("--time", action="append", metavar="AUSWAHL=VON[-BIS]",
+                         help="Uhrzeit überschreiben, z. B. \"IN2085=12:15\"")
+    transit.add_argument("--drop", action="append", metavar="AUSWAHL",
+                         help="Eintrag aus dem Angebot nehmen")
     transit.add_argument("--select", help="auswahl.json")
     transit.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     transit.add_argument("--max-gap", type=int, default=30,
@@ -813,6 +856,10 @@ def build_parser() -> argparse.ArgumentParser:
     curriculum.add_argument("--catalog", required=True, action="append")
     curriculum.add_argument("--room", action="append", metavar="AUSWAHL=RAUM",
                             help="Bei parallelen Räumen diesen wählen, z. B. \"IN0015=MW 2001\"")
+    curriculum.add_argument("--time", action="append", metavar="AUSWAHL=VON[-BIS]",
+                            help="Uhrzeit überschreiben, z. B. \"IN2085=12:15\"")
+    curriculum.add_argument("--drop", action="append", metavar="AUSWAHL",
+                            help="Eintrag aus dem Angebot nehmen")
     curriculum.add_argument("--semester", type=int, default=1, help="Fachsemester (Standard: 1)")
     curriculum.add_argument("--curriculum", help="Eigene Modulliste (CSV); Standard: WI B.Sc.")
     curriculum.set_defaults(func=cmd_curriculum)
