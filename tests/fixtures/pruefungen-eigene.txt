@@ -1,0 +1,96 @@
+MODULPRÜFUNG 
+IN2028
+[Business Analytics and Machine Learning](https://campus.tum.de/tumonline/pages/slc.tm.cp/course/950954134) 2026 W 
+07JAN 2027
+18:30 - 20:30
+102, Hörsaal 2, "Interims I" (5620.01.102)
+004, Hörsaal 1, Jürgen-Manchot "Interims II" (5416.01.004)
+MW 2001 Rudolf-Diesel-Hörsaal (5510.02.001)
+2501, Rudolf-Mößbauer-Hörsaal (5101.EG.501)
+Prüfer*in: [Bichler, Martin](https://example.invalid/bc/1)
+Berechtigte Person für Prüfungsplanung/Abwicklung: [Frank, Fabian](https://example.invalid/bc/2)[Durmann, Julius](https://example.invalid/bc/3)[Keller, Anja](https://example.invalid/bc/4)... alle anzeigen
+Organisation[TUS1DP2 ] Department of Computer Science 
+Anmeldezeitraum 16.11.2026, 00:00 - 13.12.2026, 23:59
+Abmeldung bis 31.12.2026, 23:59
+Aktuell angemeldet 53  (max. 9999) 
+Bereits angemeldet
+ Midterm-Prüfung 
+
+* MODULPRÜFUNG 
+IN2085
+[Software Engineering für betriebliche Anwendungen - Bachelorkurs](https://campus.tum.de/tumonline/pages/slc.tm.cp/course/950954406) 2026 W 
+11FEB 2027
+08:00 - 09:30
+00.02.001, MI HS 1, Friedrich L. Bauer Hörsaal (5602.EG.001)
+MW 2001 Rudolf-Diesel-Hörsaal (5510.02.001)
+Prüfer*in: [Matthes, Florian](https://example.invalid/bc/5)
+Berechtigte Person für Prüfungsplanung/Abwicklung: [Gebele, Jonas](https://example.invalid/bc/6)
+Organisation[TUS1DP2 ] Department of Computer Science 
+Anmeldezeitraum 16.11.2026, 00:00 - 15.01.2027, 23:59
+Abmeldung bis 04.02.2027, 23:59
+Aktuell angemeldet 22  (max. 9999) 
+Bereits angemeldet
+* MODULPRÜFUNG 
+IN0021
+[Einführung in die Wirtschaftsinformatik](https://campus.tum.de/tumonline/pages/slc.tm.cp/course/950953406) 2026 W 
+13FEB 2027
+09:00 - 10:30
+MW 2001 Rudolf-Diesel-Hörsaal (5510.02.001)
+MW 1801, Hörsaal (5508.02.801)
+Prüfer*in: [Rinderle-Ma, Stefanie](https://example.invalid/bc/7)
+Organisation[TUS1DP2 ] Department of Computer Science 
+Anmeldezeitraum 16.11.2026, 00:00 - 15.01.2027, 23:59
+Abmeldung bis 06.02.2027, 23:59
+Bereits angemeldet
+* MODULPRÜFUNG 
+IN0015
+[Diskrete Strukturen](https://campus.tum.de/tumonline/pages/slc.tm.cp/course/950952520) 2026 W 
+15FEB 2027
+17:00 - 19:00
+MW 2001 Rudolf-Diesel-Hörsaal (5510.02.001)
+MW 0001, Hörsaal (5510.EG.001)
+1200, Carl-von-Linde-Hörsaal (0502.01.200)
+0980, Audimax (0509.EG.980)
+Prüfer*in: [Brandt, Felix](https://example.invalid/bc/8)
+Organisation[TUS1DP2 ] Department of Computer Science
+Anmeldezeitraum 16.11.2026, 00:00 - 15.01.2027, 23:59
+Abmeldung bis 08.02.2027, 23:59
+Bereits angemeldet
+* MODULPRÜFUNG 
+MA0902
+[Analysis für Informatik](https://campus.tum.de/tumonline/pages/slc.tm.cp/course/950953338) 2026 W 
+17FEB 2027
+08:00 - 09:30
+MW 0001, Hörsaal (5510.EG.001)
+1200, Carl-von-Linde-Hörsaal (0502.01.200)
+101, Hörsaal 1, "Interims I" (5620.01.101)
+003, Hörsaal 2, "Interims II" (5416.01.003)
+0980, Audimax (0509.EG.980)
+MW 2001 Rudolf-Diesel-Hörsaal (5510.02.001)
+2501, Rudolf-Mößbauer-Hörsaal (5101.EG.501)
+102, Hörsaal 2, "Interims I" (5620.01.102)
+MW 1801, Hörsaal (5508.02.801)
+Hörsaal im Galileo nur Mo-Do 7-19 Uhr (8120.EG.001)
+004, Hörsaal 1, Jürgen-Manchot "Interims II" (5416.01.004)
+Prüfer*in: [Berger Steiger, Noam](https://example.invalid/bc/9)
+Organisation[TUS1DP1 ] Department of Mathematics 
+Anmeldezeitraum 16.11.2026, 00:00 - 15.01.2027, 23:59
+Abmeldung bis 10.02.2027, 23:59
+Bereits angemeldet
+* MODULPRÜFUNG 
+WI001059EM
+[Campus Munich: Financial Accounting](https://campus.tum.de/tumonline/pages/slc.tm.cp/course/950962619) - Bachelor 2026 W 
+23FEB 2027
+08:00 - 09:00
+0360, Theodor-Fischer-Hörsaal (0503.EG.360)
+1180, Hörsaal ohne exp. Bühne (0501.01.180)
+2300, Friedrich von Thiersch Hörsaal (0503.02.300)
+1200, Carl-von-Linde-Hörsaal (0502.01.200)
+N 1070 ZG, Lothar-Rohde-Hörsaal (0101.Z1.070)
+N 1179, Wilhelm-Nusselt-Hörsaal (0101.02.179)
+N 1189, Hans-Piloty-Hörsaal (0101.02.189)
+N 1190, Hans-Heinrich-Meinke-Hörsaal (0101.02.190)
+0980, Audimax (0509.EG.980)
+2750, Karl Max von Bauernfeind Hörsaal (0507.03.750)
+Prüfer*in: [Ernstberger, Jürgen](https://example.invalid/bc/10)
+Organisation[TUWIB30 ] Lehrstuhl für Financial Accounting (Prof. Ernstberger)

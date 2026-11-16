@@ -99,6 +99,9 @@ class CourseOption:
     end_time: time | None = None
     rhythm: str = RHYTHM_WEEKLY
     room: str = ""
+    # Alle gelisteten Räume. Prüfungen laufen in mehreren Hörsälen gleichzeitig;
+    # `room` fasst das für die Anzeige zusammen, hier steht die ganze Liste.
+    rooms: tuple[str, ...] = ()
     lecturer: str = ""
     first_date: date | None = None
     last_date: date | None = None

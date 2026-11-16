@@ -39,7 +39,7 @@ from .overrides import (
 )
 from .rooms import RoomWish, choose_rooms, parse_room_wish, transits
 from .semester import SEMESTERS, get_semester
-from .model import TYPE_LABELS, filter_events, load_events
+from .model import BERLIN, TYPE_LABELS, CourseEvent, filter_events, load_events
 from .render import render_html
 
 LEHRE_KINDS = ["VO", "VI", "VU", "UE", "TT", "SE", "PS", "PR", "PT"]
@@ -658,6 +658,53 @@ def cmd_curriculum(args) -> int:
     return 1 if ergebnis.missing else 0
 
 
+def _pruefungstermine(pruefungen) -> list[CourseEvent]:
+    """Prüfungen als Kalendertermine - mit Räumen und Fristen im Text.
+
+    Eine Klausur läuft in mehreren Hörsälen; welcher es wird, steht erst
+    kurz vorher in TUMonline. Deshalb nennt LOCATION die Zahl der Säle und
+    verweist dorthin, statt einen davon zu behaupten.
+    """
+    termine: list[CourseEvent] = []
+    for pruefung in sorted(pruefungen, key=lambda p: p.slots[0].day):
+        slot = pruefung.slots[0]
+        raeume = list(pruefung.rooms) or ([slot.room] if slot.room else [])
+
+        zeilen = [f"Modulprüfung · {pruefung.module}"]
+        if pruefung.group == "Wiederholung":
+            zeilen[0] += " · Wiederholungstermin"
+        if pruefung.lecturer:
+            zeilen.append(f"Prüfer*in: {pruefung.lecturer}")
+        if pruefung.registration_start and pruefung.deadline:
+            zeilen.append(f"Anmeldung: {pruefung.registration_start:%d.%m.%Y} – "
+                          f"{pruefung.deadline:%d.%m.%Y}")
+        if pruefung.withdraw_until:
+            zeilen.append(f"Abmeldung bis: {pruefung.withdraw_until:%d.%m.%Y}")
+        if len(raeume) > 1:
+            zeilen.append("Räume (Zuteilung erst kurz vor der Prüfung, "
+                          "siehe TUMonline):")
+            zeilen += [f"· {raum}" for raum in raeume]
+        elif raeume:
+            zeilen.append(f"Raum: {raeume[0]}")
+
+        ort = (raeume[0] if len(raeume) == 1 else
+               f"{len(raeume)} Hörsäle – Zuteilung siehe TUMonline" if raeume else "")
+
+        termine.append(CourseEvent(
+            summary=f"Klausur: {pruefung.title} ({pruefung.module})",
+            title=pruefung.title,
+            start=datetime.combine(slot.day, slot.start, tzinfo=BERLIN),
+            end=datetime.combine(slot.day, slot.end, tzinfo=BERLIN),
+            location=ort,
+            room=ort,
+            course_code=pruefung.module,
+            kind="PRUEFUNG",
+            lecturer=pruefung.lecturer,
+            description="\n".join(zeilen),
+        ))
+    return termine
+
+
 def cmd_exams(args) -> int:
     """Prüfungstermine und Anmeldefristen auflisten."""
     pruefungen = parse_exams(Path(args.input).read_text(encoding="utf-8", errors="replace"))
@@ -675,6 +722,13 @@ def cmd_exams(args) -> int:
                   f"{pruefung.deadline:%d.%m.%Y}"
                   + (f", Abmeldung bis {pruefung.withdraw_until:%d.%m.%Y}"
                      if pruefung.withdraw_until else ""))
+
+    if args.ics:
+        ziel = Path(args.ics)
+        ziel.write_text(
+            render_calendar(_pruefungstermine(pruefungen), name=args.title),
+            encoding="utf-8")
+        print(f"\n{len(pruefungen)} Prüfungstermine → {ziel.resolve()}")
 
     # Zwei Klausuren am selben Tag sind planungsrelevant.
     nach_tag: dict = {}
@@ -910,6 +964,10 @@ def build_parser() -> argparse.ArgumentParser:
     exams.add_argument("--input", required=True, help="Kopierte Prüfungsseiten")
     exams.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     exams.add_argument("--conflicts", action="store_true", help="Zeitüberschneidungen prüfen")
+    exams.add_argument("--ics", metavar="PFAD",
+                       help="Prüfungstermine zusätzlich als .ics-Datei schreiben")
+    exams.add_argument("--title", default="TUM-Prüfungen",
+                       help="Kalendername in der .ics-Datei")
     exams.set_defaults(func=cmd_exams)
 
     config = sub.add_parser("config", help="iCal-URL dauerhaft speichern")

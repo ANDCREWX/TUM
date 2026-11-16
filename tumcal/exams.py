@@ -17,6 +17,19 @@ MONATE = {
 }
 
 _TAG = re.compile(r"^(?P<tag>\d{1,2})$")
+# Die eigene Prüfungsliste schreibt Tag, Monat und Jahr in eine Zeile:
+# "07JAN 2027" statt "07" / "JAN 2027" auf der LV-Seite.
+_DATUM_KOMPAKT = re.compile(
+    r"^(?P<tag>\d{1,2})\s*(?P<monat>[A-ZÄÖÜ]{3})\.?\s*(?P<jahr>\d{4})$", re.IGNORECASE
+)
+# "MODULPRÜFUNG" leitet dort jeden Eintrag ein, danach Modulkennung und Titel.
+_PRUEFUNGSKOPF = re.compile(r"^(?:MODUL)?PR(?:Ü|UE)FUNG$", re.IGNORECASE)
+_MODULCODE = re.compile(r"^[A-Z]{2,3}\d{4,6}[A-Z]*$")
+# Titelzeilen enden auf das Semester: "... - Bachelorkurs 2026 W"
+_SEMESTER_SUFFIX = re.compile(r"\s+\d{4}\s*[WS]\s*$")
+_MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_BULLET = re.compile(r"^[*\-+]\s+")
+_PRUEFER_INLINE = re.compile(r"^Prüfer\*?in:?\s*(?P<name>.+)$", re.IGNORECASE)
 _MONAT_JAHR = re.compile(r"^(?P<monat>[A-ZÄÖÜ]{3})\.?\s+(?P<jahr>\d{4})$", re.IGNORECASE)
 _ZEIT = re.compile(r"^(?P<von>\d{1,2}:\d{2})\s*[-–]\s*(?P<bis>\d{1,2}:\d{2})$")
 _ZEITRAUM = re.compile(
@@ -25,6 +38,55 @@ _ZEITRAUM = re.compile(
 )
 _DATUM = re.compile(r"(\d{2}\.\d{2}\.\d{4})")
 _PRUEFER = re.compile(r"^Prüfer\*?in:?\s*$", re.IGNORECASE)
+# Raumzeilen tragen immer die Raumkennung in Klammern - daran erkennt man sie
+# zuverlässiger als an der Position, denn um sie herum steht viel Beiwerk.
+_RAUM_MIT_CODE = re.compile(r"\(\s*\d{4}\.[A-Z0-9]{1,3}\.[0-9A-Za-z]+\s*\)")
+
+
+def _entmarkdown(zeile: str) -> str:
+    """'[Bichler, Martin](https://…)' -> 'Bichler, Martin', Listenpunkt weg."""
+    ohne = _MARKDOWN_LINK.sub(r"\1", zeile or "")
+    return _BULLET.sub("", ohne).strip()
+
+
+def _termin(zeilen: list[str], index: int):
+    """Termin ab `index` lesen - beide Schreibweisen.
+
+    Liefert (Datum, von, bis, Index des ersten Zeilen nach dem Kopf) oder None.
+    """
+    if index + 1 >= len(zeilen):
+        return None
+
+    kompakt = _DATUM_KOMPAKT.match(zeilen[index])
+    if kompakt:
+        zeit = _ZEIT.match(zeilen[index + 1])
+        treffer, weiter = kompakt, index + 2
+    else:
+        tag = _TAG.match(zeilen[index])
+        monat = _MONAT_JAHR.match(zeilen[index + 1]) if index + 1 < len(zeilen) else None
+        zeit = _ZEIT.match(zeilen[index + 2]) if index + 2 < len(zeilen) else None
+        if not (tag and monat):
+            return None
+        treffer, weiter = None, index + 3
+        if not zeit:
+            return None
+        monat_nr = MONATE.get(monat.group("monat").upper())
+        if not monat_nr:
+            return None
+        return (date(int(monat.group("jahr")), monat_nr, int(tag.group("tag"))),
+                datetime.strptime(zeit.group("von"), "%H:%M").time(),
+                datetime.strptime(zeit.group("bis"), "%H:%M").time(),
+                weiter)
+
+    if not zeit:
+        return None
+    monat_nr = MONATE.get(treffer.group("monat").upper())
+    if not monat_nr:
+        return None
+    return (date(int(treffer.group("jahr")), monat_nr, int(treffer.group("tag"))),
+            datetime.strptime(zeit.group("von"), "%H:%M").time(),
+            datetime.strptime(zeit.group("bis"), "%H:%M").time(),
+            weiter)
 
 
 def _datum(text: str) -> date | None:
@@ -33,8 +95,13 @@ def _datum(text: str) -> date | None:
 
 
 def parse_exams(text: str) -> list[CourseOption]:
-    """Zerlegt kopierte Prüfungsseiten in je einen Eintrag pro Termin."""
-    zeilen = [z.strip() for z in text.replace("\r\n", "\n").split("\n")]
+    """Zerlegt kopierte Prüfungsseiten in je einen Eintrag pro Termin.
+
+    Zwei Formate: die Prüfungsliste einer Lehrveranstaltung ("Titel" /
+    "Nummer" als Beschriftungen, Datum auf drei Zeilen) und die eigene
+    Prüfungsübersicht ("MODULPRÜFUNG", Datum als "07JAN 2027", Markdown-Links).
+    """
+    zeilen = [_entmarkdown(z) for z in text.replace("\r\n", "\n").split("\n")]
     pruefungen: list[CourseOption] = []
 
     titel = modul = ""
@@ -57,36 +124,30 @@ def parse_exams(text: str) -> list[CourseOption]:
             index += 2
             continue
 
-        # Ein Termin beginnt mit Tag / Monat Jahr / Uhrzeit auf drei Zeilen.
-        tag = _TAG.match(zeile)
-        monat = _MONAT_JAHR.match(zeilen[index + 1]) if index + 1 < len(zeilen) else None
-        zeit = _ZEIT.match(zeilen[index + 2]) if index + 2 < len(zeilen) else None
-        if tag and monat and zeit and titel:
-            monat_nr = MONATE.get(monat.group("monat").upper())
-            if not monat_nr:
-                index += 1
-                continue
-            tag_datum = date(int(monat.group("jahr")), monat_nr, int(tag.group("tag")))
+        # Eigene Prüfungsliste: Kopfzeile, dann Modulkennung und Titel.
+        if _PRUEFUNGSKOPF.match(zeile):
+            folgende = [z for z in zeilen[index + 1 : index + 5] if z][:2]
+            if len(folgende) == 2 and _MODULCODE.match(folgende[0]):
+                modul = folgende[0]
+                titel = _SEMESTER_SUFFIX.sub("", folgende[1]).strip(" -–—")
+                ects = 0.0
+            index += 1
+            continue
 
-            # Der Block reicht bis zum nächsten Termin.
-            ende = len(zeilen)
-            for weiter in range(index + 3, len(zeilen) - 2):
-                if (_TAG.match(zeilen[weiter]) and _MONAT_JAHR.match(zeilen[weiter + 1])
-                        and _ZEIT.match(zeilen[weiter + 2])):
-                    ende = weiter
-                    break
-                if zeilen[weiter] == "Titel":
-                    ende = weiter
-                    break
-            block = zeilen[index + 3 : ende]
+        termin = _termin(zeilen, index)
+        if termin and titel:
+            tag_datum, von, bis, nach_kopf = termin
 
-            # Räume stehen vor "Prüfer*in:", Fristen dahinter.
-            raeume: list[str] = []
-            for eintrag in block:
-                if _PRUEFER.match(eintrag) or eintrag.startswith(("Organisation", "Berechtigte")):
+            # Der Block reicht bis zum nächsten Termin oder Eintrag.
+            ende_block = len(zeilen)
+            for weiter in range(nach_kopf, len(zeilen)):
+                if (_termin(zeilen, weiter) or zeilen[weiter] == "Titel"
+                        or _PRUEFUNGSKOPF.match(zeilen[weiter])):
+                    ende_block = weiter
                     break
-                if eintrag and not eintrag.startswith(("Anmelde", "Abmeldung")):
-                    raeume.append(eintrag)
+            block = zeilen[nach_kopf:ende_block]
+
+            raeume = [z for z in block if _RAUM_MIT_CODE.search(z)]
 
             blocktext = "\n".join(block)
             zeitraum = _ZEITRAUM.search(blocktext)
@@ -97,19 +158,23 @@ def parse_exams(text: str) -> list[CourseOption]:
 
             abmeldung = None
             for nr, eintrag in enumerate(block):
-                if eintrag.startswith("Abmeldung bis") and nr + 1 < len(block):
-                    abmeldung = _datum(eintrag) or _datum(block[nr + 1])
+                if eintrag.startswith("Abmeldung bis"):
+                    abmeldung = _datum(eintrag) or (
+                        _datum(block[nr + 1]) if nr + 1 < len(block) else None)
                     break
 
             pruefer = ""
             for nr, eintrag in enumerate(block):
+                inline = _PRUEFER_INLINE.match(eintrag)
                 if _PRUEFER.match(eintrag) and nr + 1 < len(block):
                     pruefer = block[nr + 1]
                     break
+                if inline:
+                    pruefer = inline.group("name").strip()
+                    break
 
-            von = datetime.strptime(zeit.group("von"), "%H:%M").time()
-            bis = datetime.strptime(zeit.group("bis"), "%H:%M").time()
             wiederholung = any(p.module == modul for p in pruefungen)
+            anzeige = " / ".join(raeume[:3])
 
             pruefungen.append(
                 CourseOption(
@@ -120,16 +185,16 @@ def parse_exams(text: str) -> list[CourseOption]:
                     ects=ects,
                     group="Wiederholung" if wiederholung else "Haupttermin",
                     lecturer=pruefer,
-                    room=" / ".join(raeume[:3]),
+                    room=anzeige,
+                    rooms=tuple(raeume),
                     deadline=anmeldung_bis,
                     registration_start=anmeldung_von,
                     withdraw_until=abmeldung,
                     note=f"{len(raeume)} Räume" if len(raeume) > 1 else "",
-                    slots=(Slot(day=tag_datum, start=von, end=bis,
-                                room=" / ".join(raeume[:3])),),
+                    slots=(Slot(day=tag_datum, start=von, end=bis, room=anzeige),),
                 )
             )
-            index = ende
+            index = ende_block
             continue
 
         index += 1

@@ -266,12 +266,34 @@ Vorlesungszeit und haben eigene, deutlich frühere Anmeldefristen.
 
 ```bash
 python3 -m tumcal exams --input pruefungen.txt --conflicts
+python3 -m tumcal exams --input meine-pruefungen.txt --ics pruefungen.ics
 ```
 
 Gelesen werden Termin, Uhrzeit, Räume, Prüfende, Anmeldezeitraum und
 Abmeldefrist; Wiederholungstermine werden als solche erkannt. Mehrere
 Prüfungen am selben Tag werden hervorgehoben, auch wenn sie sich zeitlich
 nicht überschneiden.
+
+Zwei Formate werden verstanden: die **Prüfungsliste einer Lehrveranstaltung**
+(Beschriftungen `Titel` und `Nummer`, Datum auf drei Zeilen) und die **eigene
+Prüfungsübersicht** (`MODULPRÜFUNG` als Kopfzeile, Datum als `07JAN 2027` in
+einer Zeile). Letztere kommt als Markdown mit Links und Listenpunkten aus dem
+Browser; beides wird entfernt. Als Raum zählt nur, was eine Raumkennung in
+Klammern trägt — um die Räume herum stehen Prüfende, Fristen und Zählerstände,
+und die Position allein ist kein verlässliches Kriterium.
+
+`--ics` schreibt die Termine als Kalenderdatei. Eine Klausur läuft in mehreren
+Hörsälen, und welcher es wird, steht erst kurz vorher in TUMonline — deshalb
+nennt der Ort die **Zahl der Säle** und verweist dorthin, statt einen davon zu
+behaupten; alle Säle, Prüfende und beide Fristen stehen in der Beschreibung:
+
+```
+SUMMARY:Klausur: Diskrete Strukturen (IN0015)
+LOCATION:4 Hörsäle – Zuteilung siehe TUMonline
+```
+
+Fehlen in der Kopie die Fristen, weil sie abgeschnitten ist, bleiben die Felder
+leer, statt geraten zu werden.
 
 ### Enge Raumwechsel
 
@@ -472,6 +494,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-216 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+235 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).
