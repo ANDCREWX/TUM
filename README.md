@@ -282,6 +282,24 @@ Browser; beides wird entfernt. Als Raum zählt nur, was eine Raumkennung in
 Klammern trägt — um die Räume herum stehen Prüfende, Fristen und Zählerstände,
 und die Position allein ist kein verlässliches Kriterium.
 
+Die Kopfzeile kommt in zwei Varianten: Kennung und Titel auf zwei Zeilen
+(`IN2028` / `Business Analytics …`) oder in einer verklebt
+(`WI001059EMCampus Munich: Financial Accounting`). Beide werden getrennt; die
+Verklebung liest dieselbe Regel wie der LV-Parser. Lässt sich aus der Kopfzeile
+keine Kennung lesen, entsteht **kein** Eintrag — sonst erbt er stillschweigend
+den Titel des vorherigen.
+
+`--label AUSWAHL=TEXT` stellt die Prüfungsart richtig: TUMonline führt Midterms
+in derselben Liste wie Modulprüfungen, und am Eintrag selbst steht die Art
+nicht immer. Geraten wird sie deshalb nicht.
+
+```bash
+python3 -m tumcal exams --input meine-pruefungen.txt --label "IN2028=Midterm"
+```
+
+Die Art schlägt bis in den Kalender durch — aus `Klausur: …` wird
+`Midterm: …`, und die Beschreibung beginnt entsprechend.
+
 `--ics` schreibt die Termine als Kalenderdatei. Eine Klausur läuft in mehreren
 Hörsälen, und welcher es wird, steht erst kurz vorher in TUMonline — deshalb
 nennt der Ort die **Zahl der Säle** und verweist dorthin, statt einen davon zu
@@ -494,6 +512,6 @@ Fakultäten weichen ab — vor der Anmeldung in TUMonline gegenprüfen.
 python3 -m pytest tests/ -q
 ```
 
-235 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
+243 Tests gegen die Fixtures in `tests/fixtures/` — ICS-Beispiel, CSV-Angebot,
 TUMonline-Kopien, Modulbeschreibungen und Prüfungsseiten (öffentliches
 Lehrangebot, keine persönlichen Daten).

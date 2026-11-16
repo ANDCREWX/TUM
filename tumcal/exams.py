@@ -10,6 +10,7 @@ import re
 from datetime import date, datetime
 
 from .catalog import CourseOption, Slot
+from .paste import LV_NUMMER
 
 MONATE = {
     "JAN": 1, "FEB": 2, "MÄR": 3, "MAR": 3, "APR": 4, "MAI": 5, "JUN": 6,
@@ -124,12 +125,21 @@ def parse_exams(text: str) -> list[CourseOption]:
             index += 2
             continue
 
-        # Eigene Prüfungsliste: Kopfzeile, dann Modulkennung und Titel.
+        # Eigene Prüfungsliste: Kopfzeile, dann Modulkennung und Titel - je
+        # nach Kopie auf zwei Zeilen oder in einer verklebt
+        # ("WI001059EMCampus Munich: Financial Accounting").
         if _PRUEFUNGSKOPF.match(zeile):
             folgende = [z for z in zeilen[index + 1 : index + 5] if z][:2]
-            if len(folgende) == 2 and _MODULCODE.match(folgende[0]):
-                modul = folgende[0]
-                titel = _SEMESTER_SUFFIX.sub("", folgende[1]).strip(" -–—")
+            kopf = folgende[0] if folgende else ""
+            verklebt = LV_NUMMER.match(kopf)
+            if _MODULCODE.match(kopf) and len(folgende) == 2:
+                modul, roh = kopf, folgende[1]
+            elif verklebt:
+                modul, roh = verklebt.group("id"), kopf[verklebt.end():]
+            else:
+                modul = roh = ""
+            if modul and roh:
+                titel = _SEMESTER_SUFFIX.sub("", roh).strip(" -–—")
                 ects = 0.0
             index += 1
             continue

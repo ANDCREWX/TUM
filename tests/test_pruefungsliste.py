@@ -169,3 +169,81 @@ def test_the_exam_calendar_round_trips_through_the_parser():
     assert all(e.get("DTSTART") and e.get("SUMMARY") for e in zurueck)
     uids = [e["UID"] for e in zurueck]
     assert len(set(uids)) == 6
+
+
+# --- Kennung und Titel in einer Zeile verklebt ------------------------------
+
+VERKLEBT = """MODULPRÜFUNG
+WI001059EMCampus Munich: Financial Accounting - Bachelor 2026 W
+23
+FEB 2027
+08:00 - 09:00
+0360, Theodor-Fischer-Hörsaal (0503.EG.360)
+1200, Carl-von-Linde-Hörsaal (0502.01.200)
+Prüfer*in: 
+Ernstberger, Jürgen
+Organisation[TUWIB30 ] Lehrstuhl für Financial Accounting
+"""
+
+
+def test_a_glued_module_code_and_title_are_separated():
+    """Manche Kopien schreiben 'WI001059EMCampus Munich: …' in eine Zeile."""
+    pruefung = parse_exams(VERKLEBT)[0]
+    assert pruefung.module == "WI001059EM"
+    assert pruefung.title == "Campus Munich: Financial Accounting - Bachelor"
+
+
+def test_the_three_line_date_works_under_the_new_header_too():
+    """Kopfzeile der eigenen Liste, Datum aber in der LV-Schreibweise."""
+    pruefung = parse_exams(VERKLEBT)[0]
+    assert pruefung.slots[0].day == date(2027, 2, 23)
+    assert (pruefung.slots[0].start, pruefung.slots[0].end) == (
+        time(8, 0), time(9, 0))
+
+
+def test_the_examiner_is_also_found_on_the_following_line():
+    assert parse_exams(VERKLEBT)[0].lecturer == "Ernstberger, Jürgen"
+
+
+def test_a_header_without_a_readable_code_produces_no_entry():
+    """Sonst erbt der Eintrag den Titel des vorherigen."""
+    kaputt = VERKLEBT.replace(
+        "WI001059EMCampus Munich: Financial Accounting - Bachelor 2026 W",
+        "Irgendwas ohne Kennung")
+    assert parse_exams(kaputt) == []
+
+
+# --- Prüfungsart richtigstellen ---------------------------------------------
+
+def test_the_exam_type_can_be_corrected():
+    """TUMonline führt Midterms in derselben Liste wie Modulprüfungen."""
+    from tumcal.cli import _umbenennen
+    neu, berichte = _umbenennen(PRUEFUNGEN, ["IN2028=Midterm"])
+    nach_modul = {p.module: p for p in neu}
+    assert nach_modul["IN2028"].group == "Midterm"
+    assert nach_modul["IN0015"].group == "Haupttermin"      # unberührt
+    assert any("Midterm" in z for z in berichte)
+
+
+def test_a_corrected_type_reaches_summary_and_description():
+    from tumcal.cli import _pruefungstermine, _umbenennen
+    neu, _ = _umbenennen(PRUEFUNGEN, ["IN2028=Midterm"])
+    termine = {e.course_code: e for e in _pruefungstermine(neu)}
+    assert termine["IN2028"].summary.startswith("Midterm: Business Analytics")
+    assert termine["IN2028"].description.startswith("Midterm · IN2028")
+    assert termine["IN0015"].summary.startswith("Klausur: Diskrete Strukturen")
+    assert termine["IN0015"].description.startswith("Modulprüfung · IN0015")
+
+
+def test_a_label_without_a_match_is_reported():
+    from tumcal.cli import _umbenennen
+    _, berichte = _umbenennen(PRUEFUNGEN, ["IN9999=Midterm"])
+    assert any("keine Prüfung passt" in z for z in berichte)
+
+
+def test_a_malformed_label_is_rejected():
+    import pytest
+    from tumcal.cli import _umbenennen
+    for schrott in ("IN2028", "=Midterm", "IN2028="):
+        with pytest.raises(SystemExit):
+            _umbenennen(PRUEFUNGEN, [schrott])

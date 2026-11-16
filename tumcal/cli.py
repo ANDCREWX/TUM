@@ -10,6 +10,8 @@ import webbrowser
 from datetime import date, datetime
 from pathlib import Path
 
+from dataclasses import replace
+
 from .catalog import (
     CatalogError,
     _day_shape,
@@ -23,6 +25,7 @@ from .catalog import (
     TEMPLATE_CSV,
     find_conflicts,
     load_catalog,
+    matches_selector,
 )
 from .fetch import ENV_VAR, FetchError, fetch_ics, read_ics, resolve_url, save_url
 from .ics import render_calendar
@@ -670,9 +673,8 @@ def _pruefungstermine(pruefungen) -> list[CourseEvent]:
         slot = pruefung.slots[0]
         raeume = list(pruefung.rooms) or ([slot.room] if slot.room else [])
 
-        zeilen = [f"Modulprüfung · {pruefung.module}"]
-        if pruefung.group == "Wiederholung":
-            zeilen[0] += " · Wiederholungstermin"
+        art = "Modulprüfung" if pruefung.group == "Haupttermin" else pruefung.group
+        zeilen = [f"{art} · {pruefung.module}"]
         if pruefung.lecturer:
             zeilen.append(f"Prüfer*in: {pruefung.lecturer}")
         if pruefung.registration_start and pruefung.deadline:
@@ -691,7 +693,8 @@ def _pruefungstermine(pruefungen) -> list[CourseEvent]:
                f"{len(raeume)} Hörsäle – Zuteilung siehe TUMonline" if raeume else "")
 
         termine.append(CourseEvent(
-            summary=f"Klausur: {pruefung.title} ({pruefung.module})",
+            summary=f"{'Klausur' if pruefung.group == 'Haupttermin' else art}: "
+                    f"{pruefung.title} ({pruefung.module})",
             title=pruefung.title,
             start=datetime.combine(slot.day, slot.start, tzinfo=BERLIN),
             end=datetime.combine(slot.day, slot.end, tzinfo=BERLIN),
@@ -705,12 +708,50 @@ def _pruefungstermine(pruefungen) -> list[CourseEvent]:
     return termine
 
 
+def _umbenennen(pruefungen, rohe_label):
+    """--label AUSWAHL=TEXT: die Prüfungsart eines Eintrags richtigstellen.
+
+    TUMonline führt Midterms und Modulprüfungen in derselben Liste, und die
+    Art steht dort nicht immer am Eintrag. Geraten wird sie deshalb nicht.
+    """
+    if not rohe_label:
+        return pruefungen, []
+    paare = []
+    for roh in rohe_label:
+        selector, _, text = (roh or "").partition("=")
+        if not selector.strip() or not text.strip():
+            raise SystemExit(
+                "--label erwartet AUSWAHL=TEXT, etwa --label \"IN2028=Midterm\". "
+                f"Bekommen: {roh!r}")
+        paare.append((selector.strip(), text.strip()))
+
+    ergebnis, berichte, getroffen = [], [], {s: 0 for s, _ in paare}
+    for pruefung in pruefungen:
+        treffer = next((p for p in paare if matches_selector(pruefung, p[0])), None)
+        if treffer is None:
+            ergebnis.append(pruefung)
+            continue
+        getroffen[treffer[0]] += 1
+        berichte.append(f"{pruefung.title[:46]}: als „{treffer[1]}“ geführt "
+                        f"(vorher {pruefung.group}).")
+        ergebnis.append(replace(pruefung, group=treffer[1]))
+    for selector, _ in paare:
+        if not getroffen[selector]:
+            berichte.append(f"--label {selector}=…: keine Prüfung passt auf "
+                            f"„{selector}“.")
+    return ergebnis, berichte
+
+
 def cmd_exams(args) -> int:
     """Prüfungstermine und Anmeldefristen auflisten."""
     pruefungen = parse_exams(Path(args.input).read_text(encoding="utf-8", errors="replace"))
     if not pruefungen:
         print("Keine Prüfungstermine erkannt.", file=sys.stderr)
         return 2
+
+    pruefungen, berichte = _umbenennen(pruefungen, getattr(args, "label", None))
+    for zeile in berichte:
+        print(zeile, file=sys.stderr)
 
     for pruefung in sorted(pruefungen, key=lambda p: p.slots[0].day):
         slot = pruefung.slots[0]
@@ -964,6 +1005,8 @@ def build_parser() -> argparse.ArgumentParser:
     exams.add_argument("--input", required=True, help="Kopierte Prüfungsseiten")
     exams.add_argument("--semester", default="ws2627", choices=sorted(SEMESTERS))
     exams.add_argument("--conflicts", action="store_true", help="Zeitüberschneidungen prüfen")
+    exams.add_argument("--label", action="append", metavar="AUSWAHL=TEXT",
+                       help="Prüfungsart richtigstellen, z. B. \"IN2028=Midterm\"")
     exams.add_argument("--ics", metavar="PFAD",
                        help="Prüfungstermine zusätzlich als .ics-Datei schreiben")
     exams.add_argument("--title", default="TUM-Prüfungen",

@@ -40,8 +40,9 @@ _GLEICHE_LVS = re.compile(r"Gleiche\s+LVs:\s*$", re.IGNORECASE)
 _WOCHENTAG_KLAMMER = re.compile(r"^\((Mo|Di|Mi|Do|Fr|Sa|So)\)$", re.IGNORECASE)
 # Modulkennung in Klammern: (IN0015), (WI000021_E, englisch)
 _MODUL = re.compile(r"[(\[](?P<code>[A-Z]{2,3}\d{4,6}(?:_[A-Z])?)\b")
-# Führende LV-Nummer: "0240967009Diskrete Strukturen" oder "WI000021EVEconomics I"
-_LV_NUMMER = re.compile(
+# Führende LV-Nummer: "0240967009Diskrete Strukturen" oder "WI000021EVEconomics I".
+# Öffentlich, weil die Prüfungsliste dieselbe Verklebung kennt.
+LV_NUMMER = re.compile(
     r"^(?P<id>\d{6,}"                        # 0240967009
     r"|[A-Z]{2}\d{6}[A-ZÄÖÜ]{0,2}"           # WI000021EÜ
     r"|\d{2,}[A-Z]{2,3}\d{4,6}[A-Z]{0,2}"    # 00MA0902LV
@@ -85,7 +86,7 @@ def _parse_time(token: str) -> time:
 def _clean_title(rest: str) -> tuple[str, str, str]:
     """Kopfzeile zerlegen in (LV-Nummer, Titel, Modulkennung)."""
     lv_id = ""
-    match = _LV_NUMMER.match(rest)
+    match = LV_NUMMER.match(rest)
     if match:
         lv_id = match.group("id")
         rest = rest[match.end():]
@@ -315,7 +316,7 @@ def parse_paste(text: str) -> list[CourseOption]:
             # Eine echte Kopfzeile klebt die LV-Nummer an den Titel. Die unter
             # "Gleiche LVs:" aufgezählten Verweise haben dort ein Leerzeichen -
             # sie sind keine eigenen Veranstaltungen.
-            if rest[:1].isdigit() and not _LV_NUMMER.match(rest):
+            if rest[:1].isdigit() and not LV_NUMMER.match(rest):
                 continue
             flush_group()
             lv_id, title, module = _clean_title(rest)
